@@ -1,0 +1,98 @@
+<mujoco model="test_seal">
+  <asset>
+    <model name="handd_ur10e_with_tool" file="../../assemblies/handd_ur10e_ocado_p1_2.xml"/>
+
+    <mesh name="lower_frame_mesh" file="../handd_simple_ur_test_scene/assets/550-00218REV03.STL"/>
+    <mesh name="storage_tote_mesh" file="../handd_simple_ur_test_scene/assets/550-00214REV05.STL"/>
+    <mesh name="delivery_tote_mesh" file="../handd_simple_ur_test_scene/assets/550-00215REV04.STL"/>
+    <mesh name="pedestal_mesh" file="../handd_simple_ur_test_scene/assets/550-00219REV02.STL"/>
+    <mesh name="upper_frame_storage_tote_mesh" file="../handd_simple_ur_test_scene/assets/550-00220REV03.STL"/>
+    <mesh name="upper_frame_delivery_totes_mesh" file="../handd_simple_ur_test_scene/assets/550-00221REV03.STL"/>
+
+    <texture name="sky" type="skybox" builtin="gradient" rgb1="0.95 0.97 1.0" rgb2="0.70 0.78 0.87" width="512" height="3072"/>
+    <texture name="floor_tex" type="2d" builtin="checker" rgb1="0.86 0.87 0.88" rgb2="0.78 0.79 0.81" width="512" height="512"/>
+    <material name="floor_mat" texture="floor_tex" texuniform="true" texrepeat="8 8" reflectance="0.05"/>
+    <material name="frame_mat" rgba="0.60 0.60 0.60 1"/>
+    <material name="upper_frame_mat" rgba="0.40 0.60 1.00 0.20"/>
+    <material name="storage_tote_mat" rgba="0.00 0.00 0.80 1"/>
+    <material name="delivery_tote_mat" rgba="0.80 0.80 0.00 1"/>
+    <material name="inactive_tote_mat" rgba="0.60 0.60 0.60 1"/>
+  </asset>
+
+  <statistic center="0.35 0.55 -0.10" extent="2.6"/>
+
+  <visual>
+    <headlight diffuse="0.85 0.85 0.85" ambient="0.18 0.18 0.18" specular="0.12 0.12 0.12"/>
+    <rgba haze="0.92 0.96 1.0 1"/>
+    <global azimuth="145" elevation="-22"/>
+    <map znear="0.01" zfar="30"/>
+  </visual>
+
+  <equality>
+    <weld name="seal_weld_sphere_small" body1="handd_tool_cup_tip_link" body2="seal_sphere_small" active="false"/>
+    <weld name="seal_weld_cube_medium" body1="handd_tool_cup_tip_link" body2="seal_cube_medium" active="false"/>
+    <weld name="seal_weld_rect_long" body1="handd_tool_cup_tip_link" body2="seal_rect_long" active="false"/>
+    <weld name="seal_weld_cube_tall" body1="handd_tool_cup_tip_link" body2="seal_cube_tall" active="false"/>
+  </equality>
+
+  <worldbody>
+    <light pos="1.2 -2.0 2.8" dir="-0.2 0.4 -1" directional="true" diffuse="1 1 1"/>
+    <light pos="-1.0 2.8 2.2" dir="0.3 -0.6 -1" directional="true" diffuse="0.55 0.55 0.55"/>
+
+    <geom name="floor" type="box" size="1.5 1.5 0.05" pos="0.5 0.5 -1.131" material="floor_mat"/>
+    <geom name="ceiling" type="box" size="1.5 1.5 0.05" pos="0.5 0.5 1.25" contype="0" conaffinity="0" rgba="0.4 0.6 1 0.07"/>
+
+    <geom name="lower_frame" type="mesh" mesh="lower_frame_mesh" material="frame_mat" contype="0" conaffinity="0"/>
+    <geom name="upper_frame_storage_tote" type="mesh" mesh="upper_frame_storage_tote_mesh" material="upper_frame_mat" contype="0" conaffinity="0"/>
+    <geom name="upper_frame_delivery_totes" type="mesh" mesh="upper_frame_delivery_totes_mesh" pos="-0.25 0 0" material="upper_frame_mat" contype="0" conaffinity="0"/>
+
+    <geom name="pedestal" type="mesh" mesh="pedestal_mesh" pos="0.301 0.301 0.104" material="frame_mat" contype="0" conaffinity="0"/>
+
+    <body name="robot_mount" pos="0.301 0.301 0.104">
+      <attach model="handd_ur10e_with_tool" body="base" prefix="handd_"/>
+    </body>
+
+    <geom name="storage_tote" type="mesh" mesh="storage_tote_mesh" pos="0.300 -0.4005 -0.365" material="storage_tote_mat" contype="0" conaffinity="0"/>
+    <body name="storage_tote_proxy" pos="0.300 -0.4005 -0.365">
+      <site name="storage_tote_center_site" pos="0 0 0.14" type="sphere" size="0.010" rgba="0.05 0.95 0.95 0.55"/>
+      <site name="storage_tote_rim_site" pos="0 0 0.35" type="sphere" size="0.010" rgba="0.05 0.95 0.95 0.55"/>
+      <geom name="storage_tote_floor_proxy" type="box" pos="0 0 0.008" size="0.2165 0.2865 0.008" rgba="0 0 0 0"/>
+      <geom name="storage_tote_wall_pos_x_proxy" type="box" pos="0.2365 0 0.175" size="0.008 0.2865 0.175" rgba="0 0 0 0"/>
+      <geom name="storage_tote_wall_neg_x_proxy" type="box" pos="-0.2365 0 0.175" size="0.008 0.2865 0.175" rgba="0 0 0 0"/>
+      <geom name="storage_tote_wall_pos_y_proxy" type="box" pos="0 0.3065 0.175" size="0.2365 0.008 0.175" rgba="0 0 0 0"/>
+      <geom name="storage_tote_wall_neg_y_proxy" type="box" pos="0 -0.3065 0.175" size="0.2365 0.008 0.175" rgba="0 0 0 0"/>
+    </body>
+
+    <geom name="delivery_tote_1" type="mesh" mesh="delivery_tote_mesh" pos="-0.29975 0.350 -0.365" material="delivery_tote_mat" contype="0" conaffinity="0"/>
+    <geom name="delivery_tote_2" type="mesh" mesh="delivery_tote_mesh" pos="-0.29975 1.111 -0.365" material="delivery_tote_mat" contype="0" conaffinity="0"/>
+    <geom name="delivery_tote_3" type="mesh" mesh="delivery_tote_mesh" pos="-0.29975 1.872 -0.365" material="inactive_tote_mat" contype="0" conaffinity="0"/>
+
+    <body name="seal_sphere_small" pos="0.260 -0.540 -0.299">
+      <freejoint name="seal_sphere_small_freejoint"/>
+      <geom name="seal_sphere_small_geom" type="sphere" size="0.050" density="220" rgba="0.90 0.28 0.24 1"/>
+      <site name="seal_sphere_small_pick_site" pos="0 0 0.050" type="sphere" size="0.006" rgba="1 1 1 0.6"/>
+    </body>
+
+    <body name="seal_cube_medium" pos="0.385 -0.530 -0.294">
+      <freejoint name="seal_cube_medium_freejoint"/>
+      <geom name="seal_cube_medium_geom" type="box" size="0.055 0.055 0.055" density="260" rgba="0.19 0.68 0.92 1"/>
+      <site name="seal_cube_medium_pick_site" pos="0 0 0.055" type="sphere" size="0.006" rgba="1 1 1 0.6"/>
+    </body>
+
+    <body name="seal_rect_long" pos="0.385 -0.340 -0.289">
+      <freejoint name="seal_rect_long_freejoint"/>
+      <geom name="seal_rect_long_geom" type="box" size="0.075 0.050 0.060" density="240" rgba="0.27 0.76 0.45 1"/>
+      <site name="seal_rect_long_pick_site" pos="0 0 0.060" type="sphere" size="0.006" rgba="1 1 1 0.6"/>
+    </body>
+
+    <body name="seal_cube_tall" pos="0.240 -0.300 -0.274">
+      <freejoint name="seal_cube_tall_freejoint"/>
+      <geom name="seal_cube_tall_geom" type="box" size="0.050 0.050 0.075" density="255" rgba="0.97 0.72 0.20 1"/>
+      <site name="seal_cube_tall_pick_site" pos="0 0 0.075" type="sphere" size="0.006" rgba="1 1 1 0.6"/>
+    </body>
+
+    <camera name="overview" pos="2.55 -2.10 1.85" xyaxes="0.71 0.70 0 -0.33 0.34 0.88"/>
+    <camera name="pick_side" pos="1.55 -2.35 1.25" xyaxes="0.93 0.37 0 -0.19 0.48 0.85"/>
+    <camera name="delivery_side" pos="-1.70 2.85 1.55" xyaxes="-0.85 -0.53 0 0.22 -0.35 0.91"/>
+  </worldbody>
+</mujoco>

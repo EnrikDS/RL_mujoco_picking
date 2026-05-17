@@ -216,3 +216,11 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# MuJoCo generated exports
+mjmodel.mjb
+mjmodel.xml
+
+# Generated scene initializations
+models/scenes/handd_simple_ur_test_scene/generated/*.xml
+models/scenes/handd_simple_ur_test_scene/generated/*.json

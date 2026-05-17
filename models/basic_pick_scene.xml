@@ -1,0 +1,55 @@
+<mujoco model="basic_pick_scene">
+  <compiler angle="radian" autolimits="true"/>
+
+  <option timestep="0.002" gravity="0 0 -9.81"/>
+
+  <visual>
+    <headlight ambient="0.35 0.35 0.35" diffuse="0.75 0.75 0.75" specular="0.15 0.15 0.15"/>
+    <rgba haze="0.15 0.2 0.25 1"/>
+    <map znear="0.01" zfar="20"/>
+  </visual>
+
+  <asset>
+    <texture name="sky" type="skybox" builtin="gradient" rgb1="0.92 0.97 1.0" rgb2="0.65 0.78 0.9" width="256" height="256"/>
+    <texture name="grid" type="2d" builtin="checker" rgb1="0.84 0.86 0.88" rgb2="0.74 0.76 0.79" width="512" height="512"/>
+    <material name="floor_mat" texture="grid" texrepeat="4 4" reflectance="0.05"/>
+    <material name="table_mat" rgba="0.37 0.28 0.21 1"/>
+    <material name="object_mat" rgba="0.81 0.27 0.24 1"/>
+    <material name="bin_mat" rgba="0.23 0.72 0.43 0.35"/>
+    <material name="cup_mat" rgba="0.14 0.34 0.86 1"/>
+  </asset>
+
+  <default>
+    <geom friction="0.8 0.1 0.05" condim="4" solimp="0.95 0.99 0.001" solref="0.004 1"/>
+  </default>
+
+  <worldbody>
+    <light pos="0 0 2.2" dir="0 0 -1" diffuse="1 1 1"/>
+    <light pos="1.2 -1.2 1.5" dir="-1 1 -1" diffuse="0.6 0.6 0.6"/>
+
+    <geom name="floor" type="plane" size="2 2 0.1" material="floor_mat"/>
+
+    <body name="table" pos="0 0 0.4">
+      <geom name="table_top" type="box" size="0.45 0.7 0.02" material="table_mat"/>
+    </body>
+
+    <body name="pick_object" pos="0.2 0.0 0.47">
+      <freejoint/>
+      <geom name="box" type="box" size="0.025 0.025 0.04" mass="0.25" material="object_mat"/>
+    </body>
+
+    <body name="target_bin" pos="-0.18 0.28 0.47">
+      <geom name="bin_marker" type="box" size="0.08 0.08 0.04" contype="0" conaffinity="0" material="bin_mat"/>
+      <site name="target_center" pos="0 0 0.04" type="sphere" size="0.01" rgba="0.12 0.55 0.25 1"/>
+    </body>
+
+    <body name="suction_tool" pos="0.2 0.0 0.66">
+      <geom name="tool_mount" type="capsule" fromto="0 0 0.05 0 0 -0.03" size="0.012" material="cup_mat"/>
+      <geom name="suction_cup" type="cylinder" pos="0 0 -0.04" size="0.022 0.01" material="cup_mat"/>
+      <site name="tcp" pos="0 0 -0.05" type="sphere" size="0.007" rgba="1 1 0.1 1"/>
+    </body>
+
+    <camera name="overview" pos="1.05 -1.1 0.95" xyaxes="0.72 0.69 0 -0.34 0.35 0.87"/>
+    <camera name="side" pos="0.1 -1.35 0.8" xyaxes="1 0 0 0 0.5 0.87"/>
+  </worldbody>
+</mujoco>

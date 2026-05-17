@@ -1,0 +1,63 @@
+<mujoco model="ur10e_workcell">
+  <asset>
+    <model name="ur10e_model" file="../robots/ur10e/ur10e.xml"/>
+
+    <texture name="sky" type="skybox" builtin="gradient" rgb1="0.92 0.96 1.0" rgb2="0.58 0.71 0.82" width="512" height="3072"/>
+    <texture name="floor_tex" type="2d" builtin="checker" rgb1="0.82 0.84 0.86" rgb2="0.74 0.76 0.79" width="512" height="512"/>
+    <material name="floor_mat" texture="floor_tex" texuniform="true" texrepeat="6 6" reflectance="0.08"/>
+    <material name="table_mat" rgba="0.31 0.24 0.18 1"/>
+    <material name="frame_mat" rgba="0.18 0.2 0.22 1"/>
+    <material name="object_mat" rgba="0.8 0.28 0.2 1"/>
+    <material name="bin_mat" rgba="0.23 0.71 0.43 0.35"/>
+    <material name="accent_mat" rgba="0.92 0.76 0.22 1"/>
+  </asset>
+
+  <statistic center="0.85 0.0 0.75" extent="1.6"/>
+
+  <visual>
+    <headlight diffuse="0.75 0.75 0.75" ambient="0.2 0.2 0.2" specular="0.1 0.1 0.1"/>
+    <rgba haze="0.92 0.96 1.0 1"/>
+    <global azimuth="135" elevation="-24"/>
+    <map znear="0.01" zfar="25"/>
+  </visual>
+
+  <worldbody>
+    <light pos="0.6 -1.6 2.3" dir="0.1 0.4 -1" directional="true" diffuse="0.95 0.95 0.95"/>
+    <light pos="1.8 0.8 2.0" dir="-0.6 -0.2 -1" directional="true" diffuse="0.55 0.55 0.55"/>
+
+    <geom name="floor" type="plane" size="0 0 0.05" material="floor_mat"/>
+
+    <body name="robot_pedestal" pos="0 0 0.4">
+      <geom name="pedestal_column" type="cylinder" size="0.14 0.4" material="frame_mat"/>
+      <geom name="pedestal_cap" type="cylinder" pos="0 0 0.4" size="0.2 0.04" material="frame_mat"/>
+    </body>
+
+    <body name="ur10e_mount" pos="0 0 0.84">
+      <attach model="ur10e_model" body="base" prefix="ur10e_"/>
+    </body>
+
+    <body name="work_table" pos="0.95 0 0.42">
+      <geom name="table_top" type="box" size="0.5 0.8 0.03" material="table_mat"/>
+      <geom name="leg_fl" type="box" pos="0.42 0.72 -0.39" size="0.03 0.03 0.39" material="frame_mat"/>
+      <geom name="leg_fr" type="box" pos="0.42 -0.72 -0.39" size="0.03 0.03 0.39" material="frame_mat"/>
+      <geom name="leg_rl" type="box" pos="-0.42 0.72 -0.39" size="0.03 0.03 0.39" material="frame_mat"/>
+      <geom name="leg_rr" type="box" pos="-0.42 -0.72 -0.39" size="0.03 0.03 0.39" material="frame_mat"/>
+    </body>
+
+    <body name="pick_object" pos="0.88 -0.18 0.495">
+      <freejoint/>
+      <geom name="object_box" type="box" size="0.03 0.03 0.045" mass="0.2" material="object_mat"/>
+    </body>
+
+    <body name="target_bin" pos="0.9 0.28 0.48">
+      <geom name="bin_marker" type="box" size="0.09 0.09 0.06" contype="0" conaffinity="0" material="bin_mat"/>
+      <site name="target_center" pos="0 0 0.06" type="sphere" size="0.01" material="accent_mat"/>
+    </body>
+
+    <site name="approach_hint" pos="0.88 -0.18 0.64" type="sphere" size="0.012" material="accent_mat"/>
+
+    <camera name="angled_closeup" pos="1.95 -1.65 1.35" xyaxes="0.72 0.69 0 -0.31 0.32 0.89"/>
+    <camera name="cell_side" pos="0.45 -2.1 1.1" xyaxes="1 0 0 0 0.42 0.91"/>
+    <camera name="over_table" pos="0.94 -0.02 1.9" xyaxes="1 0 0 0 1 0"/>
+  </worldbody>
+</mujoco>

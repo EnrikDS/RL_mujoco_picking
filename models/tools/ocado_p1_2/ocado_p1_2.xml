@@ -1,0 +1,45 @@
+<mujoco model="ocado_p1_2">
+  <compiler angle="radian" meshdir="assets"/>
+
+  <default>
+    <default class="visual">
+      <geom type="mesh" contype="0" conaffinity="0" group="2"/>
+    </default>
+    <default class="collision">
+      <geom group="3" rgba="0.79 0.82 0.93 1"/>
+    </default>
+  </default>
+
+  <asset>
+    <material name="gripper_body_mat" rgba="0.79216 0.81961 0.93333 1"/>
+    <mesh name="gripper_body_mesh" file="550-00260REV02.STL"/>
+  </asset>
+
+  <worldbody>
+    <body name="tool_tip_link">
+      <site name="tool_tip_frame_site" type="sphere" size="0.008" rgba="0.98 0.58 0.12 1"/>
+
+      <body name="gripper_body_link">
+        <site name="gripper_body_frame_site" type="sphere" size="0.008" rgba="0.15 0.72 1 1"/>
+
+        <geom name="gripper_body_visual" class="visual" mesh="gripper_body_mesh" material="gripper_body_mat"
+          euler="-1.5707963267948966 0 -1.5707963267948966"/>
+
+        <!-- Simple collision proxy for the long tool body -->
+        <geom name="gripper_shaft_collision" class="collision" type="capsule" fromto="0 0 0.03 0.46 0 0.03" size="0.028"/>
+        <geom name="cup_mount_collision" class="collision" type="cylinder" pos="0.505 0 0.0" size="0.026 0.03"/>
+
+        <body name="cup_tip_link" pos="0.5244 0 0">
+          <site name="cup_tip_site" type="sphere" size="0.008" rgba="1 0.85 0.15 1"/>
+
+          <body name="teleop_pivot_link"/>
+          <body name="gripper_tip_link"/>
+        </body>
+
+        <body name="cup_uncompressed_link" pos="0.5364 0 0">
+          <site name="cup_uncompressed_site" type="sphere" size="0.006" rgba="0.1 0.95 0.5 1"/>
+        </body>
+      </body>
+    </body>
+  </worldbody>
+</mujoco>
