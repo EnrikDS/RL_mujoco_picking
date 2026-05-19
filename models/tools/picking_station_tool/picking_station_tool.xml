@@ -1,4 +1,4 @@
-<mujoco model="ocado_p1_2">
+<mujoco model="picking_station_tool">
   <compiler angle="radian" meshdir="assets"/>
 
   <default>

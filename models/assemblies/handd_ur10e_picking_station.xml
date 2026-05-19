@@ -1,4 +1,4 @@
-<mujoco model="handd_ur10e_ocado_p1_2">
+<mujoco model="handd_ur10e_picking_station">
   <compiler angle="radian" meshdir="../robots/handd_ur10e/assets" autolimits="true"/>
 
   <option integrator="implicitfast"/>
@@ -39,7 +39,7 @@
   </default>
 
   <asset>
-    <model name="ocado_p1_2_tool" file="../tools/ocado_p1_2/ocado_p1_2.xml"/>
+    <model name="picking_station_tool" file="../tools/picking_station_tool/picking_station_tool.xml"/>
 
     <material class="ur10e" name="black" rgba="0.033 0.033 0.033 1"/>
     <material class="ur10e" name="jointgray" rgba="0.278 0.278 0.278 1"/>
@@ -140,7 +140,7 @@
                     <!-- Roll the suction tool 90 degrees around its own longitudinal axis. -->
                     <body name="tool_roll_frame" quat="0.70710678 0.70710678 0 0">
                       <site name="tool_roll_frame_site" type="sphere" size="0.008" rgba="0.2 0.95 0.95 1"/>
-                      <attach model="ocado_p1_2_tool" body="tool_tip_link" prefix="tool_"/>
+                      <attach model="picking_station_tool" body="tool_tip_link" prefix="tool_"/>
                     </body>
                   </body>
                 </body>

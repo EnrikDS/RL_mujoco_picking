@@ -9,8 +9,8 @@ The project now contains a **HandD-derived UR10e scene** imported from your Tosh
 It is split into separate layers so you can edit them independently:
 
 - robot: `models/robots/handd_ur10e/ur10e.xml`
-- suction tool: `models/tools/ocado_p1_2/ocado_p1_2.xml`
-- robot + tool assembly: `models/assemblies/handd_ur10e_ocado_p1_2.xml`
+- suction tool: `models/tools/picking_station_tool/picking_station_tool.xml`
+- robot + tool assembly: `models/assemblies/handd_ur10e_picking_station.xml`
 - environment scene: `models/scenes/handd_simple_ur_test_scene/scene.xml`
 
 The imported environment uses the geometry and placements from:
@@ -20,7 +20,7 @@ The imported environment uses the geometry and placements from:
 
 The suction cup geometry and TCP offsets come from:
 
-- `packages/grippers/ocado_p1/ocado_p1_2/*`
+- the picking-station tool assets imported into `models/tools/picking_station_tool/`
 
 ## Project layout
 
@@ -29,7 +29,7 @@ RL_mujoco_picking/
 ├── envs/
 ├── models/
 │   ├── assemblies/
-│   │   └── handd_ur10e_ocado_p1_2.xml
+│   │   └── handd_ur10e_picking_station.xml
 │   ├── basic_pick_scene.xml
 │   ├── robots/
 │   │   ├── handd_ur10e/
@@ -38,7 +38,7 @@ RL_mujoco_picking/
 │   │   ├── handd_simple_ur_test_scene/
 │   │   └── ur10e_workcell.xml
 │   └── tools/
-│       └── ocado_p1_2/
+│       └── picking_station_tool/
 ├── scripts/
 │   ├── initialize_handd_random_grocery_scene.py
 │   └── view_scene.py
@@ -53,11 +53,11 @@ If you want to tweak the imported UR10e:
 
 If you want to tweak the suction tool:
 
-- `models/tools/ocado_p1_2/ocado_p1_2.xml`
+- `models/tools/picking_station_tool/picking_station_tool.xml`
 
 If you want to tweak how the tool is mounted to the robot:
 
-- `models/assemblies/handd_ur10e_ocado_p1_2.xml`
+- `models/assemblies/handd_ur10e_picking_station.xml`
 
 If you want to tweak the HandD workcell:
 

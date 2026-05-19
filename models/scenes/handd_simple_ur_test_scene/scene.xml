@@ -1,6 +1,6 @@
 <mujoco model="handd_simple_ur_test_scene">
   <asset>
-    <model name="handd_ur10e_with_tool" file="../../assemblies/handd_ur10e_ocado_p1_2.xml"/>
+    <model name="handd_ur10e_with_tool" file="../../assemblies/handd_ur10e_picking_station.xml"/>
 
     <mesh name="lower_frame_mesh" file="assets/550-00218REV03.STL"/>
     <mesh name="storage_tote_mesh" file="assets/550-00214REV05.STL"/>
