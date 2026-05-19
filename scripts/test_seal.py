@@ -38,6 +38,7 @@ DEBUG_AXIS_SITE_NAMES = (
     "handd_tool_cup_tip_site",
     "handd_tool_cup_uncompressed_site",
 )
+SEAL_DEBUG_AXIS_SITE_NAME = "handd_tool_seal_tip_site"
 DEBUG_AXIS_BODY_NAMES = (
     "robot_mount",
     "handd_base",
@@ -66,7 +67,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--debug-axes",
         action="store_true",
-        help="Draw robot link and key tool/site frames. X=red, Y=green, Z=yellow.",
+        help="Draw robot link and key tool/site frames. X=red, Y=green, Z=blue.",
     )
     parser.add_argument(
         "--show-collision-geoms",
@@ -85,6 +86,17 @@ def parse_args() -> argparse.Namespace:
         type=float,
         default=5.0,
         help="Seconds to hold the initial robot pose before starting the picking controller.",
+    )
+    parser.add_argument(
+        "--debug-seal",
+        action="store_true",
+        help="Print suction seal geometry metrics during descent.",
+    )
+    parser.add_argument(
+        "--debug-seal-interval",
+        type=int,
+        default=100,
+        help="Simulation steps between --debug-seal metric prints.",
     )
     return parser.parse_args()
 
@@ -204,8 +216,11 @@ def draw_debug_axes(scene: mujoco.MjvScene, model: mujoco.MjModel, data: mujoco.
     axis_colors = (
         np.array((1.0, 0.0, 0.0, 0.95), dtype=float),
         np.array((0.0, 0.9, 0.1, 0.95), dtype=float),
-        np.array((1.0, 0.9, 0.0, 0.95), dtype=float),
+        np.array((0.0, 0.25, 1.0, 0.95), dtype=float),
     )
+    if not _draw_seal_tip_axes(scene, model, data, axis_colors):
+        return
+
     body_axis_length = 0.11
     site_axis_length = 0.075
     axis_width = 0.006
@@ -226,6 +241,32 @@ def draw_debug_axes(scene: mujoco.MjvScene, model: mujoco.MjModel, data: mujoco.
         frame = np.array(data.site_xmat[site_id], dtype=float).reshape(3, 3)
         if not _draw_frame_axes(scene, origin, frame, site_axis_length, axis_width * 0.75, axis_colors):
             return
+
+
+
+def _draw_seal_tip_axes(
+    scene: mujoco.MjvScene,
+    model: mujoco.MjModel,
+    data: mujoco.MjData,
+    axis_colors: tuple[np.ndarray, np.ndarray, np.ndarray],
+) -> bool:
+    site_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_SITE, SEAL_DEBUG_AXIS_SITE_NAME)
+    if site_id < 0:
+        return True
+    origin = np.array(data.site_xpos[site_id], dtype=float)
+    frame = np.array(data.site_xmat[site_id], dtype=float).reshape(3, 3)
+    if scene.ngeom >= scene.maxgeom:
+        return False
+    mujoco.mjv_initGeom(
+        scene.geoms[scene.ngeom],
+        mujoco.mjtGeom.mjGEOM_SPHERE,
+        np.array((0.026, 0.0, 0.0), dtype=float),
+        origin,
+        np.eye(3, dtype=float).reshape(9),
+        np.array((1.0, 1.0, 1.0, 1.0), dtype=float),
+    )
+    scene.ngeom += 1
+    return _draw_frame_axes(scene, origin, frame, 0.22, 0.016, axis_colors)
 
 
 def _draw_frame_axes(
@@ -260,10 +301,31 @@ def _draw_frame_axes(
     return True
 
 
-def run_headless(model: mujoco.MjModel, data: mujoco.MjData, max_steps: int, initial_hold_seconds: float) -> None:
+def _format_seal_debug(controller: SuctionGraspController) -> str:
+    evaluation = controller.current_seal_evaluation()
+    if evaluation is None:
+        return "seal=none"
+    return (
+        f"seal={evaluation.reason} "
+        f"gap={evaluation.gap:.4f} "
+        f"radial={evaluation.radial_offset:.4f} "
+        f"align={evaluation.normal_alignment:.3f} "
+        f"axial={evaluation.axial_offset:.4f}"
+    )
+
+
+def run_headless(
+    model: mujoco.MjModel,
+    data: mujoco.MjData,
+    max_steps: int,
+    initial_hold_seconds: float,
+    debug_seal: bool,
+    debug_seal_interval: int,
+) -> None:
     hold_initial_pose(model, data, initial_hold_seconds)
     controller = SuctionGraspController.from_test_seal_scene(model, data)
     previous_signature = None
+    seal_interval = max(1, debug_seal_interval)
     for step in range(max_steps):
         status = controller.step()
         signature = (status.current_target, status.phase, status.attached_target)
@@ -271,6 +333,8 @@ def run_headless(model: mujoco.MjModel, data: mujoco.MjData, max_steps: int, ini
             contact_text = "" if status.last_contact is None else f" contact={status.last_contact}"
             print(f"step={step} target={status.current_target} phase={status.phase} attached={status.attached_target} reason={status.last_seal_reason}{contact_text}")
             previous_signature = signature
+        if debug_seal and status.phase == "descend" and step % seal_interval == 0:
+            print(f"step={step} {_format_seal_debug(controller)}")
         mujoco.mj_step(model, data)
         if status.phase in ("done", "collision"):
             break
@@ -295,9 +359,12 @@ def run_viewer(
     debug_axes: bool,
     show_collision_geoms: bool,
     close_when_done: bool,
+    debug_seal: bool,
+    debug_seal_interval: int,
 ) -> None:
     previous_signature = None
     tcp_trace: list[np.ndarray] = []
+    seal_interval = max(1, debug_seal_interval)
     with mujoco.viewer.launch_passive(model, data) as viewer:
         if show_collision_geoms:
             viewer.opt.geomgroup[:] = 1
@@ -318,6 +385,8 @@ def run_viewer(
                 contact_text = "" if status.last_contact is None else f" contact={status.last_contact}"
                 print(f"step={step} target={status.current_target} phase={status.phase} attached={status.attached_target} reason={status.last_seal_reason}{waypoint_text}{orientation_text}{contact_text}")
                 previous_signature = signature
+            if debug_seal and status.phase == "descend" and step % seal_interval == 0:
+                print(f"step={step} {_format_seal_debug(controller)}")
             mujoco.mj_step(model, data)
             if debug_waypoints or debug_axes:
                 tcp_trace.append(controller.trajectory_position())
@@ -381,7 +450,14 @@ def main() -> None:
         )
 
     if args.headless:
-        run_headless(model, data, args.max_steps, args.initial_hold_seconds)
+        run_headless(
+            model,
+            data,
+            args.max_steps,
+            args.initial_hold_seconds,
+            args.debug_seal,
+            args.debug_seal_interval,
+        )
     else:
         run_viewer(
             model,
@@ -393,6 +469,8 @@ def main() -> None:
             args.debug_axes,
             args.show_collision_geoms or args.collision_only,
             args.close_when_done,
+            args.debug_seal,
+            args.debug_seal_interval,
         )
 
 

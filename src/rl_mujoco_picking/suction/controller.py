@@ -332,6 +332,12 @@ class SuctionGraspController:
         )
         return float(np.linalg.norm(orientation_error))
 
+    def current_seal_evaluation(self) -> SealEvaluation | None:
+        target = self._current_target()
+        if target is None:
+            return None
+        return evaluate_suction_seal(self.model, self.data, target.geom_name, self.suction_parameters)
+
     def _robot_environment_contact(self) -> str | None:
         for contact_id in range(self.data.ncon):
             contact = self.data.contact[contact_id]
@@ -609,7 +615,10 @@ class SuctionGraspController:
 
         if self.phase == "descend":
             self._ensure_phase_plan(target, "descend")
-            seal_eval = evaluate_suction_seal(self.model, self.data, target.geom_name, self.suction_parameters)
+            seal_eval = self.current_seal_evaluation()
+            if seal_eval is None:
+                self.phase = "done"
+                return self.status()
             self.last_seal_reason = seal_eval.reason
             if seal_eval.sealable:
                 self._activate_weld(target)

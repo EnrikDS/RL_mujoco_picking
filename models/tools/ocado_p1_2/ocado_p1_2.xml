@@ -24,14 +24,16 @@
         <joint
           name="cup_compliance_joint"
           type="slide"
-          axis="-1 0 0"
-          range="0 0.04"
+          axis="0 -1 0"
+          range="0 0.10"
           limited="true"
-          stiffness="120"
-          damping="4"
+          stiffness="35"
+          damping="1.2"
           armature="0.002"
         />
         <site name="gripper_body_frame_site" type="sphere" size="0.008" rgba="0.15 0.72 1 1"/>
+        <site name="seal_tip_site" pos="0 0.5244 0" type="sphere" size="0.012" rgba="1 0.05 0.05 1"/>
+        <site name="seal_axis_site" pos="0 0.5124 0" type="sphere" size="0.008" rgba="0.05 0.9 0.05 1"/>
 
         <geom name="gripper_body_visual" class="visual" mesh="gripper_body_mesh" material="gripper_body_mat"
           euler="-1.5707963267948966 0 -1.5707963267948966"/>

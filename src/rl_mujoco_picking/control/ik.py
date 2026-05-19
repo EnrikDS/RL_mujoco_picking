@@ -71,12 +71,12 @@ class IKSolver:
         self.qpos_indices = self.joint_set.qpos_indices(model)
         self.dof_indices = self.joint_set.dof_indices(model)
         self.tip_site_name = (
-            "handd_tool_cup_tip_site"
+            "handd_tool_seal_tip_site"
             if self.suction_parameters is None
             else self.suction_parameters.tip_site_name
         )
         self.uncompressed_site_name = (
-            "handd_tool_cup_uncompressed_site"
+            "handd_tool_seal_axis_site"
             if self.suction_parameters is None
             else self.suction_parameters.uncompressed_site_name
         )

@@ -21,8 +21,8 @@ class SuctionSealTests(unittest.TestCase):
             <mujoco model="sphere_test">
               <worldbody>
                 <body name="tool">
-                  <site name="handd_tool_cup_tip_site" pos="0 0 0.06"/>
-                  <site name="handd_tool_cup_uncompressed_site" pos="0 0 0.072"/>
+                  <site name="handd_tool_seal_tip_site" pos="0 0 0.06"/>
+                  <site name="handd_tool_seal_axis_site" pos="0 0 0.072"/>
                 </body>
                 <body name="obj">
                   <geom name="sphere_geom" type="sphere" pos="0 0 0.03" size="0.03"/>
@@ -41,8 +41,8 @@ class SuctionSealTests(unittest.TestCase):
             <mujoco model="box_offset_test">
               <worldbody>
                 <body name="tool">
-                  <site name="handd_tool_cup_tip_site" pos="0.05 0 0.05"/>
-                  <site name="handd_tool_cup_uncompressed_site" pos="0.05 0 0.062"/>
+                  <site name="handd_tool_seal_tip_site" pos="0.05 0 0.05"/>
+                  <site name="handd_tool_seal_axis_site" pos="0.05 0 0.062"/>
                 </body>
                 <body name="obj">
                   <geom name="box_geom" type="box" pos="0 0 0.025" size="0.025 0.025 0.025"/>

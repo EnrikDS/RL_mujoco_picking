@@ -33,7 +33,7 @@ class TestSealControllerTests(unittest.TestCase):
         self.assertEqual(model.neq, 4)
         compliance_joint = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, "handd_tool_cup_compliance_joint")
         self.assertGreaterEqual(compliance_joint, 0)
-        np.testing.assert_allclose(model.jnt_range[compliance_joint], (0.0, 0.04), atol=1e-9)
+        np.testing.assert_allclose(model.jnt_range[compliance_joint], (0.0, 0.10), atol=1e-9)
 
     def test_robot_pose_and_object_sizes_match_spec(self) -> None:
         model = mujoco.MjModel.from_xml_path(str(TEST_SCENE))
@@ -59,7 +59,7 @@ class TestSealControllerTests(unittest.TestCase):
 
         self.assertGreater(np.linalg.norm(model.opt.gravity), 0.0)
 
-        tool_tip_site_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_SITE, "handd_tool_cup_tip_site")
+        tool_tip_site_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_SITE, "handd_tool_seal_tip_site")
         tote_rim_site_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_SITE, "storage_tote_rim_site")
         tool_tip = np.array(data.site_xpos[tool_tip_site_id], dtype=float)
         tote_rim = np.array(data.site_xpos[tote_rim_site_id], dtype=float)

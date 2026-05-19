@@ -7,8 +7,8 @@ import mujoco
 import numpy as np
 
 
-DEFAULT_CUP_TIP_SITE = "handd_tool_cup_tip_site"
-DEFAULT_CUP_UNCOMPRESSED_SITE = "handd_tool_cup_uncompressed_site"
+DEFAULT_CUP_TIP_SITE = "handd_tool_seal_tip_site"
+DEFAULT_CUP_UNCOMPRESSED_SITE = "handd_tool_seal_axis_site"
 
 
 @dataclass(frozen=True)
