@@ -28,9 +28,12 @@ class TestSealControllerTests(unittest.TestCase):
 
         controller = SuctionGraspController.from_test_seal_scene(model, data)
         status = controller.status()
-        self.assertEqual(status.current_target, "seal_sphere_small")
+        self.assertEqual(status.current_target, "seal_rect_long")
         self.assertEqual(len(controller.targets), 4)
         self.assertEqual(model.neq, 4)
+        compliance_joint = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, "handd_tool_cup_compliance_joint")
+        self.assertGreaterEqual(compliance_joint, 0)
+        np.testing.assert_allclose(model.jnt_range[compliance_joint], (0.0, 0.04), atol=1e-9)
 
     def test_robot_pose_and_object_sizes_match_spec(self) -> None:
         model = mujoco.MjModel.from_xml_path(str(TEST_SCENE))
@@ -103,9 +106,27 @@ class TestSealControllerTests(unittest.TestCase):
                 body2 = mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_BODY, model.geom_bodyid[contact.geom2]) or ""
                 robot_involved = body1.startswith("handd_") or body2.startswith("handd_")
                 self_collision = body1.startswith("handd_") and body2.startswith("handd_")
+                target_contact = body1.startswith("seal_") or body2.startswith("seal_")
                 tote_proxy_contact = body1 == "storage_tote_proxy" or body2 == "storage_tote_proxy"
-                if robot_involved and not self_collision and not tote_proxy_contact:
+                if robot_involved and not self_collision and not target_contact and not tote_proxy_contact:
                     self.fail(f"Unexpected robot contact during approach: {body1} vs {body2}")
+
+    def test_debug_waypoints_are_spaced_at_fifty_millimeters_or_less(self) -> None:
+        model = mujoco.MjModel.from_xml_path(str(TEST_SCENE))
+        data = mujoco.MjData(model)
+        key_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_KEY, "handd_home")
+        mujoco.mj_resetDataKeyframe(model, data, key_id)
+        initialize_test_seal_robot_pose(model, data)
+        mujoco.mj_forward(model, data)
+
+        controller = SuctionGraspController.from_test_seal_scene(model, data)
+        target = controller._current_target()
+        self.assertIsNotNone(target)
+        controller._ensure_phase_plan(target, "approach")
+        waypoints = np.array(controller.debug_waypoint_positions())
+        self.assertGreater(len(waypoints), 1)
+        spacing = np.linalg.norm(np.diff(waypoints, axis=0), axis=1)
+        self.assertLessEqual(float(np.max(spacing)), controller.config.waypoint_spacing + 1e-9)
 
 
 if __name__ == "__main__":

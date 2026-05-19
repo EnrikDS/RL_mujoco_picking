@@ -15,10 +15,10 @@ from rl_mujoco_picking.suction.seal import (
 
 
 DEFAULT_TARGET_ORDER = (
-    "seal_sphere_small",
-    "seal_cube_medium",
     "seal_rect_long",
     "seal_cube_tall",
+    "seal_cube_medium",
+    "seal_sphere_small",
 )
 TEST_SEAL_NEUTRAL_QPOS = (
     1.57,
@@ -42,11 +42,17 @@ class SealTarget:
 @dataclass(frozen=True)
 class TestSealConfig:
     target_axis: tuple[float, float, float] = (0.0, 0.0, 1.0)
+    trajectory_site_name: str = "handd_tool_tool_tip_frame_site"
     approach_height: float = 0.14
     lift_height: float = 0.26
     transit_clearance_height: float = 0.70
-    descend_timeout_steps: int = 900
+    waypoint_spacing: float = 0.05
+    waypoint_tolerance: float = 0.02
+    waypoint_orientation_tolerance: float = 0.06
+    descend_timeout_steps: int = 3500
     max_linear_speed: float = 0.2
+    gravity_compensation: bool = True
+    stop_on_environment_contact: bool = False
 
 
 @dataclass(frozen=True)
@@ -57,6 +63,7 @@ class ControllerStatus:
     completed_targets: tuple[str, ...]
     failed_targets: tuple[str, ...]
     last_seal_reason: str | None
+    last_contact: str | None
 
 
 def _geom_type_name(model: mujoco.MjModel, geom_id: int) -> str:
@@ -134,6 +141,25 @@ def _relative_pose(
     return rel_pos, rel_quat
 
 
+def _frame_with_x_axis(x_axis: np.ndarray, reference_frame: np.ndarray) -> np.ndarray:
+    x_axis = np.asarray(x_axis, dtype=float)
+    x_axis /= np.linalg.norm(x_axis)
+    y_axis = np.asarray(reference_frame[:, 1], dtype=float)
+    y_axis = y_axis - float(np.dot(y_axis, x_axis)) * x_axis
+    if np.linalg.norm(y_axis) < 1e-6:
+        y_axis = np.array((0.0, 1.0, 0.0), dtype=float)
+        y_axis = y_axis - float(np.dot(y_axis, x_axis)) * x_axis
+    if np.linalg.norm(y_axis) < 1e-6:
+        y_axis = np.array((1.0, 0.0, 0.0), dtype=float)
+        y_axis = y_axis - float(np.dot(y_axis, x_axis)) * x_axis
+    y_axis /= np.linalg.norm(y_axis)
+    z_axis = np.cross(x_axis, y_axis)
+    z_axis /= np.linalg.norm(z_axis)
+    y_axis = np.cross(z_axis, x_axis)
+    y_axis /= np.linalg.norm(y_axis)
+    return np.column_stack((x_axis, y_axis, z_axis))
+
+
 class SuctionGraspController:
     def __init__(
         self,
@@ -148,20 +174,22 @@ class SuctionGraspController:
         self.targets = targets
         self.config = config or TestSealConfig()
         self.suction_parameters = suction_parameters or SuctionCupParameters()
-        self.ik_solver = IKSolver(model, data, suction_parameters=self.suction_parameters)
-        self.planning_data = mujoco.MjData(model)
-        self.position_planning_ik_solver = IKSolver(
-            model,
-            self.planning_data,
-            suction_parameters=self.suction_parameters,
-            position_gain=3.5,
-            axis_gain=0.0,
-            max_joint_step=0.05,
+        self.trajectory_parameters = SuctionCupParameters(
+            tip_site_name=self.config.trajectory_site_name,
+            uncompressed_site_name=self.suction_parameters.uncompressed_site_name,
+            seal_radius=self.suction_parameters.seal_radius,
+            lip_tolerance=self.suction_parameters.lip_tolerance,
+            compliance=self.suction_parameters.compliance,
+            max_gap=self.suction_parameters.max_gap,
+            min_alignment=self.suction_parameters.min_alignment,
+            radial_margin=self.suction_parameters.radial_margin,
         )
-        self.aligned_planning_ik_solver = IKSolver(
+        self.ik_solver = IKSolver(model, data, suction_parameters=self.trajectory_parameters)
+        self.planning_data = mujoco.MjData(model)
+        self.planning_ik_solver = IKSolver(
             model,
             self.planning_data,
-            suction_parameters=self.suction_parameters,
+            suction_parameters=self.trajectory_parameters,
             position_gain=3.5,
             axis_gain=0.8,
             max_joint_step=0.04,
@@ -176,37 +204,31 @@ class SuctionGraspController:
         self.attached_rel_pos: np.ndarray | None = None
         self.attached_rel_quat: np.ndarray | None = None
         self.last_seal_reason: str | None = None
+        self.last_contact: str | None = None
         self.phase_step_count = 0
         self.storage_tote_center_site_id = self._site_id("storage_tote_center_site")
         self.storage_tote_rim_site_id = self._site_id("storage_tote_rim_site")
+        self.trajectory_site_id = self._site_id(self.config.trajectory_site_name)
         self.command_q = self.ik_solver.current_joint_positions()
         self.data.ctrl[: len(self.ik_solver.qpos_indices)] = self.command_q
-        _, initial_axis = suction_axis(self.model, self.data, self.suction_parameters)
-        self.tote_hover_q = self._solve_pose_ik(
-            np.array(
-                (
-                    self._storage_tote_center()[0],
-                    self._storage_tote_center()[1],
-                    self._safe_transit_height(),
-                ),
-                dtype=float,
-            ),
-            seed_q=self.command_q,
-            cup_axis=initial_axis,
-            axis_tolerance=1.0,
-        )
-        self.target_hover_q: dict[str, np.ndarray] = {
-            target.body_name: self._solve_pose_ik(
-                self._safe_hover_target(target),
-                seed_q=self.tote_hover_q,
-                cup_axis=initial_axis,
-                axis_tolerance=1.0,
-            )
-            for target in self.targets
-        }
+        _, self.fixed_cup_axis = suction_axis(self.model, self.data, self.trajectory_parameters)
+        self.fixed_tip_xmat = self._tip_xmat(self.data)
+        self.plan_target_name: str | None = None
+        self.plan_phase: str | None = None
+        self.plan_qpos: list[np.ndarray] = []
+        self.plan_positions: list[np.ndarray] = []
+        self.plan_index = 0
+
+    def _apply_gravity_compensation(self) -> None:
+        if not self.config.gravity_compensation:
+            return
+        self.data.qfrc_applied[self.ik_solver.dof_indices] = self.data.qfrc_bias[self.ik_solver.dof_indices]
+
+    def trajectory_position(self) -> np.ndarray:
+        return np.array(self.data.site_xpos[self.trajectory_site_id], dtype=float)
 
     def _bounded_target_position(self, requested_position: np.ndarray) -> np.ndarray:
-        cup_center, _ = suction_axis(self.model, self.data, self.suction_parameters)
+        cup_center = self.trajectory_position()
         delta = np.asarray(requested_position, dtype=float) - cup_center
         distance = float(np.linalg.norm(delta))
         if distance < 1e-9:
@@ -250,6 +272,7 @@ class SuctionGraspController:
             completed_targets=tuple(self.completed_targets),
             failed_targets=tuple(self.failed_targets),
             last_seal_reason=self.last_seal_reason,
+            last_contact=self.last_contact,
         )
 
     def _site_id(self, site_name: str) -> int:
@@ -281,62 +304,186 @@ class SuctionGraspController:
         current_q = self.ik_solver.current_joint_positions()
         return float(np.max(np.abs(current_q - np.asarray(q_target, dtype=float)))) <= tolerance
 
-    def _plan_joint_target(
-        self,
-        position: np.ndarray,
-        pos_tolerance: float = 0.006,
-        axis_tolerance: float = 0.04,
-        max_iterations: int = 80,
-    ) -> np.ndarray:
-        self.planning_data.qpos[:] = self.data.qpos
-        self.planning_data.qvel[:] = 0.0
-        self.planning_data.ctrl[:] = self.data.ctrl
-        self.planning_data.qpos[self.aligned_planning_ik_solver.qpos_indices] = self.command_q
-        mujoco.mj_forward(self.model, self.planning_data)
+    def _tip_xmat(self, data: mujoco.MjData) -> np.ndarray:
+        return np.array(data.site_xmat[self.ik_solver.tip_site_id], dtype=float).reshape(3, 3)
 
-        ik_target = IKTarget(
-            position=np.asarray(position, dtype=float),
-            cup_axis=self.target_axis,
-            pos_tolerance=pos_tolerance,
-            axis_tolerance=axis_tolerance,
+    def debug_waypoint_positions(self) -> tuple[np.ndarray, ...]:
+        return tuple(position.copy() for position in self.plan_positions)
+
+    def active_waypoint_position(self) -> np.ndarray | None:
+        if self.plan_index >= len(self.plan_positions):
+            return None
+        return self.plan_positions[self.plan_index].copy()
+
+    def active_waypoint_error(self) -> float | None:
+        waypoint = self.active_waypoint_position()
+        if waypoint is None:
+            return None
+        return float(np.linalg.norm(self.trajectory_position() - waypoint))
+
+    def active_waypoint_orientation_error(self) -> float | None:
+        if self.active_waypoint_position() is None:
+            return None
+        current_frame = self._tip_xmat(self.data)
+        orientation_error = 0.5 * (
+            np.cross(current_frame[:, 0], self.fixed_tip_xmat[:, 0])
+            + np.cross(current_frame[:, 1], self.fixed_tip_xmat[:, 1])
+            + np.cross(current_frame[:, 2], self.fixed_tip_xmat[:, 2])
         )
-        for _ in range(max_iterations):
-            if self.aligned_planning_ik_solver.reached(ik_target):
-                break
-            q_target, _, _ = self.aligned_planning_ik_solver.solve_step(ik_target)
-            self.planning_data.qpos[self.aligned_planning_ik_solver.qpos_indices] = q_target
-            self.planning_data.qvel[self.aligned_planning_ik_solver.dof_indices] = 0.0
-            mujoco.mj_forward(self.model, self.planning_data)
-        return self.aligned_planning_ik_solver.current_joint_positions()
+        return float(np.linalg.norm(orientation_error))
 
-    def _solve_pose_ik(
+    def _robot_environment_contact(self) -> str | None:
+        for contact_id in range(self.data.ncon):
+            contact = self.data.contact[contact_id]
+            body1 = mujoco.mj_id2name(
+                self.model,
+                mujoco.mjtObj.mjOBJ_BODY,
+                self.model.geom_bodyid[contact.geom1],
+            ) or ""
+            body2 = mujoco.mj_id2name(
+                self.model,
+                mujoco.mjtObj.mjOBJ_BODY,
+                self.model.geom_bodyid[contact.geom2],
+            ) or ""
+            robot1 = body1.startswith("handd_")
+            robot2 = body2.startswith("handd_")
+            if robot1 == robot2:
+                continue
+            if body1.startswith("seal_") or body2.startswith("seal_"):
+                continue
+            geom1 = mujoco.mj_id2name(self.model, mujoco.mjtObj.mjOBJ_GEOM, contact.geom1) or f"geom_{contact.geom1}"
+            geom2 = mujoco.mj_id2name(self.model, mujoco.mjtObj.mjOBJ_GEOM, contact.geom2) or f"geom_{contact.geom2}"
+            return f"{body1}/{geom1} vs {body2}/{geom2} dist={contact.dist:.5f}"
+        return None
+
+    def _reset_plan(self) -> None:
+        self.plan_target_name = None
+        self.plan_phase = None
+        self.plan_qpos = []
+        self.plan_positions = []
+        self.plan_index = 0
+
+    def _cartesian_waypoints(self, anchors: list[np.ndarray]) -> list[np.ndarray]:
+        waypoints: list[np.ndarray] = [np.asarray(anchors[0], dtype=float)]
+        spacing = max(self.config.waypoint_spacing, 1e-6)
+        for start, end in zip(anchors, anchors[1:], strict=False):
+            delta = np.asarray(end, dtype=float) - np.asarray(start, dtype=float)
+            distance = float(np.linalg.norm(delta))
+            if distance < 1e-9:
+                continue
+            steps = max(1, int(np.ceil(distance / spacing)))
+            for step in range(1, steps + 1):
+                waypoints.append(np.asarray(start, dtype=float) + delta * (step / steps))
+        return waypoints
+
+    def _solve_waypoint_ik(
         self,
         position: np.ndarray,
         seed_q: np.ndarray,
-        cup_axis: np.ndarray | None = None,
-        pos_tolerance: float = 0.006,
-        axis_tolerance: float = 0.04,
-        max_iterations: int = 120,
-    ) -> np.ndarray:
+        pos_tolerance: float = 0.008,
+        axis_tolerance: float = 0.06,
+        max_iterations: int = 180,
+    ) -> tuple[np.ndarray, float, float]:
         self.planning_data.qpos[:] = self.data.qpos
         self.planning_data.qvel[:] = 0.0
-        self.planning_data.qpos[self.position_planning_ik_solver.qpos_indices] = np.asarray(seed_q, dtype=float)
+        self.planning_data.qpos[self.planning_ik_solver.qpos_indices] = np.asarray(seed_q, dtype=float)
         mujoco.mj_forward(self.model, self.planning_data)
 
         ik_target = IKTarget(
             position=np.asarray(position, dtype=float),
-            cup_axis=self.target_axis if cup_axis is None else np.asarray(cup_axis, dtype=float),
+            cup_axis=self.fixed_cup_axis,
             pos_tolerance=pos_tolerance,
             axis_tolerance=axis_tolerance,
+            frame_xmat=self.fixed_tip_xmat,
         )
+        pos_error = float("inf")
+        orient_error = float("inf")
         for _ in range(max_iterations):
-            if self.position_planning_ik_solver.reached(ik_target):
+            if self.planning_ik_solver.reached(ik_target):
                 break
-            q_target, _, _ = self.position_planning_ik_solver.solve_step(ik_target)
-            self.planning_data.qpos[self.position_planning_ik_solver.qpos_indices] = q_target
-            self.planning_data.qvel[self.position_planning_ik_solver.dof_indices] = 0.0
+            q_target, pos_error, orient_error = self.planning_ik_solver.solve_step(ik_target)
+            self.planning_data.qpos[self.planning_ik_solver.qpos_indices] = q_target
+            self.planning_data.qvel[self.planning_ik_solver.dof_indices] = 0.0
             mujoco.mj_forward(self.model, self.planning_data)
-        return self.position_planning_ik_solver.current_joint_positions().copy()
+        _, pos_error, orient_error = self.planning_ik_solver.solve_step(ik_target)
+        return self.planning_ik_solver.current_joint_positions().copy(), pos_error, orient_error
+
+    def _build_phase_plan(self, target: SealTarget, phase: str) -> None:
+        cup_center = self.trajectory_position()
+        pick_position = self._pick_site_target(target, 0.0)
+        safe_z = max(cup_center[2], pick_position[2] + self.config.approach_height, self._safe_transit_height())
+
+        if phase == "approach":
+            anchors = [
+                cup_center,
+                np.array((cup_center[0], cup_center[1], safe_z), dtype=float),
+                np.array((pick_position[0], pick_position[1], safe_z), dtype=float),
+            ]
+        elif phase == "descend":
+            anchors = [
+                cup_center,
+                np.array((pick_position[0], pick_position[1], cup_center[2]), dtype=float),
+                np.array((pick_position[0], pick_position[1], pick_position[2]), dtype=float),
+            ]
+        elif phase == "lift":
+            anchors = [
+                cup_center,
+                np.array((cup_center[0], cup_center[1], safe_z), dtype=float),
+            ]
+        else:
+            raise ValueError(f"Unsupported plan phase: {phase}")
+
+        positions = self._cartesian_waypoints(anchors)
+        qpos: list[np.ndarray] = []
+        seed_q = self.command_q.copy()
+        for position in positions:
+            seed_q, _, _ = self._solve_waypoint_ik(position, seed_q=seed_q)
+            qpos.append(seed_q.copy())
+
+        self.plan_target_name = target.body_name
+        self.plan_phase = phase
+        self.plan_positions = positions
+        self.plan_qpos = qpos
+        self.plan_index = 0
+
+    def _ensure_phase_plan(self, target: SealTarget, phase: str) -> None:
+        if self.plan_target_name == target.body_name and self.plan_phase == phase:
+            return
+        self._build_phase_plan(target, phase)
+
+    def _follow_phase_plan(self) -> bool:
+        if self.plan_index >= len(self.plan_qpos):
+            return True
+        waypoint_error = self.active_waypoint_error()
+        orientation_error = self.active_waypoint_orientation_error()
+        if (
+            waypoint_error is not None
+            and waypoint_error <= self.config.waypoint_tolerance
+            and self.plan_index == 0
+        ):
+            self.plan_index += 1
+            return self.plan_index >= len(self.plan_qpos)
+        if (
+            waypoint_error is not None
+            and orientation_error is not None
+            and waypoint_error <= self.config.waypoint_tolerance
+            and orientation_error <= self.config.waypoint_orientation_tolerance
+        ):
+            self.plan_index += 1
+            return self.plan_index >= len(self.plan_qpos)
+
+        waypoint = self.plan_positions[self.plan_index]
+        q_target, _, _ = self.ik_solver.solve_step(
+            IKTarget(
+                position=waypoint,
+                cup_axis=self.fixed_cup_axis,
+                pos_tolerance=self.config.waypoint_tolerance,
+                axis_tolerance=0.08,
+                frame_xmat=self.fixed_tip_xmat,
+            )
+        )
+        self._set_robot_ctrl(q_target)
+        return self.plan_index >= len(self.plan_qpos)
 
     def _current_target(self) -> SealTarget | None:
         if self.current_index >= len(self.targets):
@@ -363,7 +510,7 @@ class SuctionGraspController:
         return pick_target
 
     def _approach_waypoint(self, target: SealTarget) -> np.ndarray:
-        cup_center, _ = suction_axis(self.model, self.data, self.suction_parameters)
+        cup_center = self.trajectory_position()
         safe_z = max(cup_center[2], self._safe_transit_height())
         tote_center = self._storage_tote_center()
         hover_target = self._safe_hover_target(target)
@@ -429,11 +576,21 @@ class SuctionGraspController:
         self.last_seal_reason = None
 
     def _lift_clear(self, target: SealTarget) -> bool:
-        cup_center, _ = suction_axis(self.model, self.data, self.suction_parameters)
+        cup_center = self.trajectory_position()
         lift_target = self._pick_site_target(target, self.config.lift_height)
         return cup_center[2] >= lift_target[2] - 0.01
 
     def step(self) -> ControllerStatus:
+        self._apply_gravity_compensation()
+        contact = self._robot_environment_contact()
+        if contact is not None:
+            self.last_contact = contact
+            if self.config.stop_on_environment_contact:
+                self.phase = "collision"
+                self.data.ctrl[: len(self.command_q)] = self.command_q
+                return self.status()
+        else:
+            self.last_contact = None
         target = self._current_target()
         if target is None:
             self.data.ctrl[:6] = self.ik_solver.current_joint_positions()
@@ -443,26 +600,15 @@ class SuctionGraspController:
         self.phase_step_count += 1
 
         if self.phase == "approach":
-            if not self._joint_target_reached(self.tote_hover_q):
-                self._set_robot_ctrl(self.tote_hover_q)
-                return self.status()
-            hover_q = self.target_hover_q[target.body_name]
-            if not self._joint_target_reached(hover_q):
-                self._set_robot_ctrl(hover_q)
-                return self.status()
-            self.phase = "descend"
-            self.phase_step_count = 0
+            self._ensure_phase_plan(target, "approach")
+            if self._follow_phase_plan():
+                self.phase = "descend"
+                self.phase_step_count = 0
+                self._reset_plan()
             return self.status()
 
         if self.phase == "descend":
-            requested_position = self._pick_site_target(target, 0.0)
-            target_position = self._bounded_target_position(requested_position)
-            q_target = self._plan_joint_target(
-                target_position,
-                pos_tolerance=0.004,
-                axis_tolerance=0.03,
-            )
-            self._set_robot_ctrl(q_target)
+            self._ensure_phase_plan(target, "descend")
             seal_eval = evaluate_suction_seal(self.model, self.data, target.geom_name, self.suction_parameters)
             self.last_seal_reason = seal_eval.reason
             if seal_eval.sealable:
@@ -470,29 +616,26 @@ class SuctionGraspController:
                 self.attached_target = target
                 self.phase = "lift"
                 self.phase_step_count = 0
-            elif self.ik_solver.reached(
-                IKTarget(
-                    position=requested_position,
-                    cup_axis=self.target_axis,
-                    pos_tolerance=0.004,
-                    axis_tolerance=0.03,
-                )
-            ) or self.phase_step_count >= self.config.descend_timeout_steps:
+                self._reset_plan()
+            elif self._follow_phase_plan() or self.phase_step_count >= self.config.descend_timeout_steps:
                 self._advance_target(failed=True)
+                self._reset_plan()
             return self.status()
 
         if self.phase == "lift":
-            target_position = self._bounded_target_position(
-                self._pick_site_target(target, self.config.lift_height)
-            )
-            q_target = self._plan_joint_target(target_position)
-            self._set_robot_ctrl(q_target)
-            if self.attached_target is not None and self._lift_clear(self.attached_target):
+            self._ensure_phase_plan(target, "lift")
+            plan_finished = self._follow_phase_plan()
+            if self.attached_target is not None and (plan_finished or self._lift_clear(self.attached_target)):
                 self._deactivate_weld(self.attached_target)
                 self._hide_body(self.attached_target)
                 self.attached_target = None
                 mujoco.mj_forward(self.model, self.data)
                 self._advance_target(failed=False)
+                self._reset_plan()
+            return self.status()
+
+        if self.phase == "collision":
+            self.data.ctrl[: len(self.command_q)] = self.command_q
             return self.status()
 
         raise ValueError(f"Unsupported controller phase: {self.phase}")

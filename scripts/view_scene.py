@@ -11,6 +11,8 @@ import mujoco.viewer
 REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
+if str(REPO_ROOT / "src") not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT / "src"))
 
 from envs.handd_startup_randomization import (
     StartupDropConfig,
@@ -18,6 +20,7 @@ from envs.handd_startup_randomization import (
     restore_spawn_state,
     settle_objects,
 )
+from rl_mujoco_picking.visualization import apply_collision_visualization
 
 DEFAULT_SCENE = REPO_ROOT / "models" / "scenes" / "handd_simple_ur_test_scene" / "scene.xml"
 FRAME_MODE_MAP = {
@@ -85,6 +88,16 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help="Optional RNG seed for reproducible startup drops. Omit for a fresh random scene each run.",
     )
+    parser.add_argument(
+        "--show-collision-geoms",
+        action="store_true",
+        help="Tint all collidable geoms and reveal invisible collision proxies in the viewer.",
+    )
+    parser.add_argument(
+        "--collision-only",
+        action="store_true",
+        help="Hide non-collidable visual geoms so only collision solids remain visible.",
+    )
     return parser.parse_args()
 
 
@@ -129,8 +142,17 @@ def main() -> None:
             raise ValueError(f"Keyframe not found in scene: {args.keyframe}")
     if runtime_scene is not None:
         restore_spawn_state(model, data, runtime_scene)
+    if args.show_collision_geoms or args.collision_only:
+        summary = apply_collision_visualization(model, collision_only=args.collision_only)
+        print(
+            "Collision visualization: "
+            f"collidable={summary.collidable_geoms}, noncollidable={summary.noncollidable_geoms}, "
+            f"collision_only={args.collision_only}"
+        )
 
     with mujoco.viewer.launch_passive(model, data) as viewer:
+        if args.show_collision_geoms or args.collision_only:
+            viewer.opt.geomgroup[:] = 1
         viewer.opt.frame = FRAME_MODE_MAP[args.frames]
 
         if args.camera is not None:

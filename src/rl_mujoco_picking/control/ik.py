@@ -23,6 +23,7 @@ class IKTarget:
     cup_axis: np.ndarray
     pos_tolerance: float = 0.006
     axis_tolerance: float = 0.04
+    frame_xmat: np.ndarray | None = None
 
 
 @dataclass(frozen=True)
@@ -97,15 +98,28 @@ class IKSolver:
         axis /= np.linalg.norm(axis)
         return tip_pos, axis
 
+    def tip_position(self) -> np.ndarray:
+        return np.array(self.data.site_xpos[self.tip_site_id], dtype=float)
+
     def current_joint_positions(self) -> np.ndarray:
         return np.array(self.data.qpos[self.qpos_indices], dtype=float)
 
     def solve_step(self, target: IKTarget) -> tuple[np.ndarray, float, float]:
-        cup_center, current_axis = self.suction_axis()
+        cup_center = self.tip_position()
         position_error = np.asarray(target.position, dtype=float) - cup_center
-        axis_target = np.asarray(target.cup_axis, dtype=float)
-        axis_target /= np.linalg.norm(axis_target)
-        axis_error = np.cross(current_axis, axis_target)
+        if target.frame_xmat is None:
+            _, current_axis = self.suction_axis()
+            axis_target = np.asarray(target.cup_axis, dtype=float)
+            axis_target /= np.linalg.norm(axis_target)
+            orientation_error = np.cross(current_axis, axis_target)
+        else:
+            current_frame = np.array(self.data.site_xmat[self.tip_site_id], dtype=float).reshape(3, 3)
+            target_frame = np.asarray(target.frame_xmat, dtype=float).reshape(3, 3)
+            orientation_error = 0.5 * (
+                np.cross(current_frame[:, 0], target_frame[:, 0])
+                + np.cross(current_frame[:, 1], target_frame[:, 1])
+                + np.cross(current_frame[:, 2], target_frame[:, 2])
+            )
 
         jacp = np.zeros((3, self.model.nv), dtype=float)
         jacr = np.zeros((3, self.model.nv), dtype=float)
@@ -119,19 +133,30 @@ class IKSolver:
         error = np.concatenate(
             (
                 self.position_gain * position_error,
-                self.axis_gain * axis_error,
+                self.axis_gain * orientation_error,
             )
         )
         damping_matrix = (self.damping**2) * np.eye(jacobian.shape[0], dtype=float)
         dq = jacobian.T @ np.linalg.solve(jacobian @ jacobian.T + damping_matrix, error)
         dq = np.clip(dq, -self.max_joint_step, self.max_joint_step)
         q_target = self.current_joint_positions() + dq
-        return q_target, float(np.linalg.norm(position_error)), float(np.linalg.norm(axis_error))
+        return q_target, float(np.linalg.norm(position_error)), float(np.linalg.norm(orientation_error))
 
     def reached(self, target: IKTarget) -> bool:
-        cup_center, current_axis = self.suction_axis()
+        cup_center = self.tip_position()
         position_error = float(np.linalg.norm(np.asarray(target.position, dtype=float) - cup_center))
-        axis_target = np.asarray(target.cup_axis, dtype=float)
-        axis_target /= np.linalg.norm(axis_target)
-        axis_error = float(np.linalg.norm(np.cross(current_axis, axis_target)))
-        return position_error <= target.pos_tolerance and axis_error <= target.axis_tolerance
+        if target.frame_xmat is None:
+            _, current_axis = self.suction_axis()
+            axis_target = np.asarray(target.cup_axis, dtype=float)
+            axis_target /= np.linalg.norm(axis_target)
+            orientation_error = float(np.linalg.norm(np.cross(current_axis, axis_target)))
+        else:
+            current_frame = np.array(self.data.site_xmat[self.tip_site_id], dtype=float).reshape(3, 3)
+            target_frame = np.asarray(target.frame_xmat, dtype=float).reshape(3, 3)
+            orientation_error_vector = 0.5 * (
+                np.cross(current_frame[:, 0], target_frame[:, 0])
+                + np.cross(current_frame[:, 1], target_frame[:, 1])
+                + np.cross(current_frame[:, 2], target_frame[:, 2])
+            )
+            orientation_error = float(np.linalg.norm(orientation_error_vector))
+        return position_error <= target.pos_tolerance and orientation_error <= target.axis_tolerance

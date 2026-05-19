@@ -19,6 +19,7 @@
     <material name="delivery_tote_mat" rgba="0.80 0.80 0.00 1"/>
     <material name="inactive_tote_mat" rgba="0.60 0.60 0.60 1"/>
     <material name="accent_mat" rgba="0.98 0.74 0.16 1"/>
+    <material name="collision_proxy_mat" rgba="0.00 0.95 0.28 0"/>
   </asset>
 
   <statistic center="0.35 0.55 -0.10" extent="2.6"/>
@@ -41,7 +42,27 @@
     <geom name="upper_frame_storage_tote" type="mesh" mesh="upper_frame_storage_tote_mesh" material="upper_frame_mat" contype="0" conaffinity="0"/>
     <geom name="upper_frame_delivery_totes" type="mesh" mesh="upper_frame_delivery_totes_mesh" pos="-0.25 0 0" material="upper_frame_mat" contype="0" conaffinity="0"/>
 
-    <geom name="pedestal" type="mesh" mesh="pedestal_mesh" pos="0.301 0.301 0.104" material="frame_mat"/>
+    <body name="frame_collision_proxy">
+      <geom name="storage_deck_neg_x_proxy" type="box" pos="-0.005 -0.4005 0.010" size="0.020 0.395 0.015" material="collision_proxy_mat"/>
+      <geom name="storage_deck_pos_x_proxy" type="box" pos="0.605 -0.4005 0.010" size="0.020 0.395 0.015" material="collision_proxy_mat"/>
+      <geom name="storage_deck_neg_y_proxy" type="box" pos="0.300 -0.7755 0.010" size="0.285 0.020 0.015" material="collision_proxy_mat"/>
+      <geom name="storage_deck_pos_y_proxy" type="box" pos="0.300 -0.0255 0.010" size="0.285 0.020 0.015" material="collision_proxy_mat"/>
+      <geom name="delivery_1_deck_neg_x_proxy" type="box" pos="-0.57475 0.350 0.010" size="0.020 0.395 0.015" material="collision_proxy_mat"/>
+      <geom name="delivery_1_deck_pos_x_proxy" type="box" pos="-0.02475 0.350 0.010" size="0.020 0.395 0.015" material="collision_proxy_mat"/>
+      <geom name="delivery_1_deck_neg_y_proxy" type="box" pos="-0.29975 -0.025 0.010" size="0.255 0.020 0.015" material="collision_proxy_mat"/>
+      <geom name="delivery_1_deck_pos_y_proxy" type="box" pos="-0.29975 0.725 0.010" size="0.255 0.020 0.015" material="collision_proxy_mat"/>
+      <geom name="delivery_2_deck_neg_x_proxy" type="box" pos="-0.57475 1.111 0.010" size="0.020 0.395 0.015" material="collision_proxy_mat"/>
+      <geom name="delivery_2_deck_pos_x_proxy" type="box" pos="-0.02475 1.111 0.010" size="0.020 0.395 0.015" material="collision_proxy_mat"/>
+      <geom name="delivery_2_deck_neg_y_proxy" type="box" pos="-0.29975 0.736 0.010" size="0.255 0.020 0.015" material="collision_proxy_mat"/>
+      <geom name="delivery_2_deck_pos_y_proxy" type="box" pos="-0.29975 1.486 0.010" size="0.255 0.020 0.015" material="collision_proxy_mat"/>
+      <geom name="delivery_3_deck_neg_x_proxy" type="box" pos="-0.57475 1.872 0.010" size="0.020 0.395 0.015" material="collision_proxy_mat"/>
+      <geom name="delivery_3_deck_pos_x_proxy" type="box" pos="-0.02475 1.872 0.010" size="0.020 0.395 0.015" material="collision_proxy_mat"/>
+      <geom name="delivery_3_deck_neg_y_proxy" type="box" pos="-0.29975 1.497 0.010" size="0.255 0.020 0.015" material="collision_proxy_mat"/>
+      <geom name="delivery_3_deck_pos_y_proxy" type="box" pos="-0.29975 2.247 0.010" size="0.255 0.020 0.015" material="collision_proxy_mat"/>
+    </body>
+
+    <geom name="pedestal" type="mesh" mesh="pedestal_mesh" pos="0.301 0.301 0.104" material="frame_mat" contype="0" conaffinity="0"/>
+    <geom name="pedestal_proxy" type="box" pos="0.1804 0.1804 -0.486" size="0.2455 0.2455 0.506" material="collision_proxy_mat"/>
 
     <body name="robot_mount" pos="0.301 0.301 0.104">
       <site name="robot_mount_frame_site" type="sphere" size="0.012" rgba="0.98 0.32 0.18 1"/>
@@ -66,9 +87,30 @@
       <geom name="storage_tote_wall_pos_y_proxy" type="box" pos="0 0.2985 0.175" size="0.2285 0.012 0.175" rgba="0 0 0 0"/>
       <geom name="storage_tote_wall_neg_y_proxy" type="box" pos="0 -0.2985 0.175" size="0.2285 0.012 0.175" rgba="0 0 0 0"/>
     </body>
-    <geom name="delivery_tote_1" type="mesh" mesh="delivery_tote_mesh" pos="-0.29975 0.350 -0.365" material="delivery_tote_mat"/>
-    <geom name="delivery_tote_2" type="mesh" mesh="delivery_tote_mesh" pos="-0.29975 1.111 -0.365" material="delivery_tote_mat"/>
-    <geom name="delivery_tote_3" type="mesh" mesh="delivery_tote_mesh" pos="-0.29975 1.872 -0.365" material="inactive_tote_mat"/>
+    <geom name="delivery_tote_1" type="mesh" mesh="delivery_tote_mesh" pos="-0.29975 0.350 -0.365" material="delivery_tote_mat" contype="0" conaffinity="0"/>
+    <body name="delivery_tote_1_proxy" pos="-0.29975 0.350 -0.365">
+      <geom name="delivery_tote_1_floor_proxy" type="box" pos="0 0 0.008" size="0.2015 0.2865 0.008" rgba="0 0 0 0"/>
+      <geom name="delivery_tote_1_wall_pos_x_proxy" type="box" pos="0.2215 0 0.175" size="0.008 0.2865 0.175" rgba="0 0 0 0"/>
+      <geom name="delivery_tote_1_wall_neg_x_proxy" type="box" pos="-0.2215 0 0.175" size="0.008 0.2865 0.175" rgba="0 0 0 0"/>
+      <geom name="delivery_tote_1_wall_pos_y_proxy" type="box" pos="0 0.3065 0.175" size="0.2215 0.008 0.175" rgba="0 0 0 0"/>
+      <geom name="delivery_tote_1_wall_neg_y_proxy" type="box" pos="0 -0.3065 0.175" size="0.2215 0.008 0.175" rgba="0 0 0 0"/>
+    </body>
+    <geom name="delivery_tote_2" type="mesh" mesh="delivery_tote_mesh" pos="-0.29975 1.111 -0.365" material="delivery_tote_mat" contype="0" conaffinity="0"/>
+    <body name="delivery_tote_2_proxy" pos="-0.29975 1.111 -0.365">
+      <geom name="delivery_tote_2_floor_proxy" type="box" pos="0 0 0.008" size="0.2015 0.2865 0.008" rgba="0 0 0 0"/>
+      <geom name="delivery_tote_2_wall_pos_x_proxy" type="box" pos="0.2215 0 0.175" size="0.008 0.2865 0.175" rgba="0 0 0 0"/>
+      <geom name="delivery_tote_2_wall_neg_x_proxy" type="box" pos="-0.2215 0 0.175" size="0.008 0.2865 0.175" rgba="0 0 0 0"/>
+      <geom name="delivery_tote_2_wall_pos_y_proxy" type="box" pos="0 0.3065 0.175" size="0.2215 0.008 0.175" rgba="0 0 0 0"/>
+      <geom name="delivery_tote_2_wall_neg_y_proxy" type="box" pos="0 -0.3065 0.175" size="0.2215 0.008 0.175" rgba="0 0 0 0"/>
+    </body>
+    <geom name="delivery_tote_3" type="mesh" mesh="delivery_tote_mesh" pos="-0.29975 1.872 -0.365" material="inactive_tote_mat" contype="0" conaffinity="0"/>
+    <body name="delivery_tote_3_proxy" pos="-0.29975 1.872 -0.365">
+      <geom name="delivery_tote_3_floor_proxy" type="box" pos="0 0 0.008" size="0.2015 0.2865 0.008" rgba="0 0 0 0"/>
+      <geom name="delivery_tote_3_wall_pos_x_proxy" type="box" pos="0.2215 0 0.175" size="0.008 0.2865 0.175" rgba="0 0 0 0"/>
+      <geom name="delivery_tote_3_wall_neg_x_proxy" type="box" pos="-0.2215 0 0.175" size="0.008 0.2865 0.175" rgba="0 0 0 0"/>
+      <geom name="delivery_tote_3_wall_pos_y_proxy" type="box" pos="0 0.3065 0.175" size="0.2215 0.008 0.175" rgba="0 0 0 0"/>
+      <geom name="delivery_tote_3_wall_neg_y_proxy" type="box" pos="0 -0.3065 0.175" size="0.2215 0.008 0.175" rgba="0 0 0 0"/>
+    </body>
 
     <site name="pick_reference" pos="0.300 -0.4005 0.010" type="sphere" size="0.012" material="accent_mat"/>
     <site name="place_reference_1" pos="-0.29975 0.350 0.010" type="sphere" size="0.012" rgba="0.2 0.9 0.5 1"/>
