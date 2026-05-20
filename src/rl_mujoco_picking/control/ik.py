@@ -1,3 +1,10 @@
+"""Small damped-least-squares IK helper for the UR arm.
+
+The controller asks this solver for one bounded joint update at a time.  This
+keeps the logic easy to inspect: high-level code owns waypoints and phases,
+while this module only converts a Cartesian tool target into joint commands.
+"""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -19,6 +26,8 @@ DEFAULT_ARM_JOINTS = (
 
 @dataclass(frozen=True)
 class IKTarget:
+    """Cartesian target for the controlled tool site."""
+
     position: np.ndarray
     cup_axis: np.ndarray
     pos_tolerance: float = 0.006
@@ -28,9 +37,13 @@ class IKTarget:
 
 @dataclass(frozen=True)
 class RobotJointSet:
+    """Names and MuJoCo indices for the six arm joints used by IK."""
+
     joint_names: tuple[str, ...] = DEFAULT_ARM_JOINTS
 
     def joint_ids(self, model: mujoco.MjModel) -> list[int]:
+        """Resolve joint ids, accepting both plain UR names and handd-prefixed names."""
+
         joint_ids: list[int] = []
         for joint_name in self.joint_names:
             joint_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, joint_name)
@@ -49,6 +62,8 @@ class RobotJointSet:
 
 
 class IKSolver:
+    """Damped least-squares inverse kinematics around one tool site."""
+
     def __init__(
         self,
         model: mujoco.MjModel,
@@ -70,6 +85,7 @@ class IKSolver:
         self.max_joint_step = max_joint_step
         self.qpos_indices = self.joint_set.qpos_indices(model)
         self.dof_indices = self.joint_set.dof_indices(model)
+        # The tip/axis sites come from suction parameters so control and seal can share frames.
         self.tip_site_name = (
             "handd_tool_seal_tip_site"
             if self.suction_parameters is None
@@ -92,6 +108,8 @@ class IKSolver:
             raise ValueError(f"Uncompressed site not found: {self.uncompressed_site_name}")
 
     def suction_axis(self) -> tuple[np.ndarray, np.ndarray]:
+        """Return the current tip position and cup longitudinal axis."""
+
         tip_pos = np.array(self.data.site_xpos[self.tip_site_id], dtype=float)
         uncompressed_pos = np.array(self.data.site_xpos[self.uncompressed_site_id], dtype=float)
         axis = uncompressed_pos - tip_pos
@@ -102,9 +120,18 @@ class IKSolver:
         return np.array(self.data.site_xpos[self.tip_site_id], dtype=float)
 
     def current_joint_positions(self) -> np.ndarray:
+        """Current qpos values for the controlled six joints."""
+
         return np.array(self.data.qpos[self.qpos_indices], dtype=float)
 
     def solve_step(self, target: IKTarget) -> tuple[np.ndarray, float, float]:
+        """Compute one bounded IK update toward a target.
+
+        Position error uses the site translational Jacobian.  Orientation error
+        either aligns only the suction axis or, when ``frame_xmat`` is provided,
+        keeps the full tool frame close to the chosen reference orientation.
+        """
+
         cup_center = self.tip_position()
         position_error = np.asarray(target.position, dtype=float) - cup_center
         if target.frame_xmat is None:
@@ -124,6 +151,7 @@ class IKSolver:
         jacp = np.zeros((3, self.model.nv), dtype=float)
         jacr = np.zeros((3, self.model.nv), dtype=float)
         mujoco.mj_jacSite(self.model, self.data, jacp, jacr, self.tip_site_id)
+        # Build a 6x6 task Jacobian: top rows are translation, bottom rows are rotation.
         jacobian = np.vstack(
             (
                 self.position_gain * jacp[:, self.dof_indices],
@@ -136,13 +164,17 @@ class IKSolver:
                 self.axis_gain * orientation_error,
             )
         )
+        # Damped least squares is more stable than a direct inverse near singular poses.
         damping_matrix = (self.damping**2) * np.eye(jacobian.shape[0], dtype=float)
         dq = jacobian.T @ np.linalg.solve(jacobian @ jacobian.T + damping_matrix, error)
+        # Per-step clipping prevents huge actuator jumps when the target is far or ill-conditioned.
         dq = np.clip(dq, -self.max_joint_step, self.max_joint_step)
         q_target = self.current_joint_positions() + dq
         return q_target, float(np.linalg.norm(position_error)), float(np.linalg.norm(orientation_error))
 
     def reached(self, target: IKTarget) -> bool:
+        """Check whether the current site pose is inside target tolerances."""
+
         cup_center = self.tip_position()
         position_error = float(np.linalg.norm(np.asarray(target.position, dtype=float) - cup_center))
         if target.frame_xmat is None:

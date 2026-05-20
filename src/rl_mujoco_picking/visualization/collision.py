@@ -1,3 +1,9 @@
+"""Viewer utilities for making MuJoCo collision geometry visible.
+
+These helpers do not change collision behavior.  They only recolor geoms so we
+can see which solids are actually participating in contacts while debugging.
+"""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -8,6 +14,8 @@ import numpy as np
 
 @dataclass(frozen=True)
 class CollisionVisualizationSummary:
+    """Counts reported after recoloring the model."""
+
     collidable_geoms: int
     noncollidable_geoms: int
 
@@ -22,10 +30,14 @@ def _geom_body_name(model: mujoco.MjModel, geom_id: int) -> str:
 
 
 def _is_collidable(model: mujoco.MjModel, geom_id: int) -> bool:
+    """MuJoCo geoms collide only when both contype and conaffinity are non-zero."""
+
     return bool(model.geom_contype[geom_id] and model.geom_conaffinity[geom_id])
 
 
 def _collision_rgba(body_name: str) -> np.ndarray:
+    """Choose stable debug colors by body family."""
+
     if body_name.startswith("handd_"):
         return np.array((1.0, 0.24, 0.06, 0.58), dtype=float)
     if body_name.startswith("seal_"):
@@ -48,9 +60,11 @@ def apply_collision_visualization(
     for geom_id in range(model.ngeom):
         body_name = _geom_body_name(model, geom_id)
         if _is_collidable(model, geom_id):
+            # Collision geoms become bright and semi-transparent.
             model.geom_rgba[geom_id] = _collision_rgba(body_name)
             collidable_count += 1
         else:
+            # Visual-only geoms are hidden or faded so they do not mask collision solids.
             model.geom_rgba[geom_id][3] = 0.0 if collision_only else visual_alpha
             noncollidable_count += 1
     return CollisionVisualizationSummary(
@@ -60,6 +74,8 @@ def apply_collision_visualization(
 
 
 def describe_collidable_geoms(model: mujoco.MjModel) -> tuple[str, ...]:
+    """Return text rows for every geom that can participate in contacts."""
+
     rows: list[str] = []
     for geom_id in range(model.ngeom):
         if not _is_collidable(model, geom_id):

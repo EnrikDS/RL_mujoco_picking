@@ -161,6 +161,23 @@
     <general class="size2" name="wrist_3" joint="wrist_3_joint"/>
   </actuator>
 
+  <contact>
+    <!-- The suction tool is mounted through the wrist assembly; keep
+         proximal arm links collidable, but ignore local mounting overlaps. -->
+    <exclude body1="wrist_1_link" body2="tool_tool_tip_link"/>
+    <exclude body1="wrist_1_link" body2="tool_gripper_body_link"/>
+    <exclude body1="wrist_1_link" body2="tool_cup_tip_link"/>
+    <exclude body1="wrist_1_link" body2="tool_cup_uncompressed_link"/>
+    <exclude body1="wrist_2_link" body2="tool_tool_tip_link"/>
+    <exclude body1="wrist_2_link" body2="tool_gripper_body_link"/>
+    <exclude body1="wrist_2_link" body2="tool_cup_tip_link"/>
+    <exclude body1="wrist_2_link" body2="tool_cup_uncompressed_link"/>
+    <exclude body1="wrist_3_link" body2="tool_tool_tip_link"/>
+    <exclude body1="wrist_3_link" body2="tool_gripper_body_link"/>
+    <exclude body1="wrist_3_link" body2="tool_cup_tip_link"/>
+    <exclude body1="wrist_3_link" body2="tool_cup_uncompressed_link"/>
+  </contact>
+
   <keyframe>
     <key name="home" qpos="-1.5708 -1.5708 1.5708 -1.5708 -1.5708 0" ctrl="-1.5708 -1.5708 1.5708 -1.5708 -1.5708 0"/>
   </keyframe>

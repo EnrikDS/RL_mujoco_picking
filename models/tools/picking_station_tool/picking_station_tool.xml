@@ -18,17 +18,17 @@
   <worldbody>
     <body name="tool_tip_link">
       <site name="tool_tip_frame_site" type="sphere" size="0.008" rgba="0.98 0.58 0.12 1"/>
-      <site name="cup_nominal_site" pos="0.5244 0 0" type="sphere" size="0.007" rgba="1 0.15 0.15 1"/>
+      <site name="cup_nominal_site" pos="0 0.5244 0" type="sphere" size="0.007" rgba="1 0.15 0.15 1"/>
 
       <body name="gripper_body_link">
         <joint
           name="cup_compliance_joint"
           type="slide"
           axis="0 -1 0"
-          range="0 0.10"
+          range="0 0.04"
           limited="true"
-          stiffness="35"
-          damping="1.2"
+          stiffness="100"
+          damping="1.8"
           armature="0.002"
         />
         <site name="gripper_body_frame_site" type="sphere" size="0.008" rgba="0.15 0.72 1 1"/>
@@ -41,7 +41,7 @@
         <geom name="gripper_body_collision" class="collision" type="mesh" mesh="gripper_body_mesh"
           euler="-1.5707963267948966 0 -1.5707963267948966"/>
 
-        <body name="cup_tip_link" pos="0.5244 0 0">
+        <body name="cup_tip_link" pos="0 0.5244 0">
           <geom name="cup_lip_collision" class="collision" type="sphere" size="0.026" mass="0.025" rgba="1 0.78 0.1 0.45"/>
           <site name="cup_tip_site" type="sphere" size="0.008" rgba="1 0.85 0.15 1"/>
 
@@ -49,7 +49,7 @@
           <body name="gripper_tip_link"/>
         </body>
 
-        <body name="cup_uncompressed_link" pos="0.5364 0 0">
+        <body name="cup_uncompressed_link" pos="0 0.5364 0">
           <site name="cup_uncompressed_site" type="sphere" size="0.006" rgba="0.1 0.95 0.5 1"/>
         </body>
       </body>

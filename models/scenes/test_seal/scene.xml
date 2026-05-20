@@ -86,6 +86,8 @@
 
     <geom name="delivery_tote_1" type="mesh" mesh="delivery_tote_mesh" pos="-0.29975 0.350 -0.365" material="delivery_tote_mat" contype="0" conaffinity="0"/>
     <body name="delivery_tote_1_proxy" pos="-0.29975 0.350 -0.365">
+      <site name="delivery_tote_1_drop_site" pos="0 0 0.580" type="sphere" size="0.012" rgba="1.0 0.2 0.2 0.75"/>
+      <site name="delivery_tote_1_rim_site" pos="0 0 0.350" type="sphere" size="0.010" rgba="1.0 0.95 0.1 0.55"/>
       <geom name="delivery_tote_1_floor_proxy" type="box" pos="0 0 0.008" size="0.2015 0.2865 0.008" rgba="0 0 0 0"/>
       <geom name="delivery_tote_1_wall_pos_x_proxy" type="box" pos="0.2215 0 0.175" size="0.008 0.2865 0.175" rgba="0 0 0 0"/>
       <geom name="delivery_tote_1_wall_neg_x_proxy" type="box" pos="-0.2215 0 0.175" size="0.008 0.2865 0.175" rgba="0 0 0 0"/>
@@ -109,9 +111,9 @@
       <geom name="delivery_tote_3_wall_neg_y_proxy" type="box" pos="0 -0.3065 0.175" size="0.2215 0.008 0.175" rgba="0 0 0 0"/>
     </body>
 
-    <body name="seal_sphere_small" pos="0.260 -0.540 -0.299">
+    <body name="seal_sphere_small" pos="0.400 -0.450 -0.299">
       <freejoint name="seal_sphere_small_freejoint"/>
-      <geom name="seal_sphere_small_geom" type="sphere" size="0.050" density="220" rgba="0.90 0.28 0.24 1"/>
+      <geom name="seal_sphere_small_geom" type="box" size="0.050 0.050 0.050" density="220" rgba="0.90 0.28 0.24 1"/>
       <site name="seal_sphere_small_pick_site" pos="0 0 0.050" type="sphere" size="0.006" rgba="1 1 1 0.6"/>
     </body>
 
@@ -121,7 +123,7 @@
       <site name="seal_cube_medium_pick_site" pos="0 0 0.055" type="sphere" size="0.006" rgba="1 1 1 0.6"/>
     </body>
 
-    <body name="seal_rect_long" pos="0.385 -0.340 -0.289">
+    <body name="seal_rect_long" pos="0.400 -0.320 -0.289">
       <freejoint name="seal_rect_long_freejoint"/>
       <geom name="seal_rect_long_geom" type="box" size="0.075 0.050 0.060" density="240" rgba="0.27 0.76 0.45 1"/>
       <site name="seal_rect_long_pick_site" pos="0 0 0.060" type="sphere" size="0.006" rgba="1 1 1 0.6"/>

@@ -4,7 +4,7 @@ import unittest
 
 import mujoco
 
-from rl_mujoco_picking.suction import evaluate_suction_seal
+from rl_mujoco_picking.suction import SuctionCupParameters, evaluate_suction_seal
 
 
 def _build_model(xml: str) -> tuple[mujoco.MjModel, mujoco.MjData]:
@@ -54,6 +54,35 @@ class SuctionSealTests(unittest.TestCase):
         result = evaluate_suction_seal(model, data, "box_geom")
         self.assertFalse(result.sealable)
         self.assertEqual(result.reason, "outside_cup_radius")
+
+    def test_contact_offset_evaluates_the_lip_instead_of_sphere_center(self) -> None:
+        model, data = _build_model(
+            """
+            <mujoco model="contact_offset_test">
+              <worldbody>
+                <body name="tool">
+                  <site name="handd_tool_seal_tip_site" pos="0 0 0.076"/>
+                  <site name="handd_tool_seal_axis_site" pos="0 0 0.088"/>
+                </body>
+                <body name="obj">
+                  <geom name="box_geom" type="box" pos="0 0 0.025" size="0.04 0.04 0.025"/>
+                </body>
+              </worldbody>
+            </mujoco>
+            """
+        )
+        without_offset = evaluate_suction_seal(model, data, "box_geom")
+        with_offset = evaluate_suction_seal(
+            model,
+            data,
+            "box_geom",
+            SuctionCupParameters(contact_offset=0.026),
+        )
+        self.assertFalse(without_offset.sealable)
+        self.assertEqual(without_offset.reason, "too_far_from_surface")
+        self.assertTrue(with_offset.sealable)
+        self.assertEqual(with_offset.reason, "seal_candidate")
+        self.assertLess(with_offset.gap, without_offset.gap)
 
 
 if __name__ == "__main__":

@@ -1,3 +1,10 @@
+"""Run and inspect the deterministic suction seal test scene.
+
+This script is the quickest way to debug the robot, tool compliance, trajectory
+waypoints, collision geometry and seal criterion before using the same pieces
+inside an RL environment.
+"""
+
 from __future__ import annotations
 
 import argparse
@@ -22,6 +29,7 @@ from rl_mujoco_picking.visualization import apply_collision_visualization
 
 
 DEFAULT_SCENE = REPO_ROOT / "models" / "scenes" / "test_seal" / "scene.xml"
+# Joint order must match the six arm actuators in the MJCF.
 ARM_JOINT_NAMES = (
     "handd_shoulder_pan_joint",
     "handd_shoulder_lift_joint",
@@ -30,6 +38,7 @@ ARM_JOINT_NAMES = (
     "handd_wrist_2_joint",
     "handd_wrist_3_joint",
 )
+# Sites and bodies drawn when --debug-axes is enabled.  Colors are X=red, Y=green, Z=blue.
 DEBUG_AXIS_SITE_NAMES = (
     "handd_wrist_3_frame_site",
     "handd_tool_tool_tip_frame_site",
@@ -58,6 +67,8 @@ DEBUG_AXIS_BODY_NAMES = (
 
 
 def parse_args() -> argparse.Namespace:
+    """Collect viewer/debug options without changing scene files."""
+
     parser = argparse.ArgumentParser(description="Run the fixed test_seal suction-pick sequence.")
     parser.add_argument("--scene", type=Path, default=DEFAULT_SCENE, help="Path to the test_seal MJCF scene.")
     parser.add_argument("--keyframe", type=str, default="handd_home", help="Robot keyframe name to load before starting.")
@@ -98,10 +109,34 @@ def parse_args() -> argparse.Namespace:
         default=100,
         help="Simulation steps between --debug-seal metric prints.",
     )
+    parser.add_argument(
+        "--debug-jacobian",
+        action="store_true",
+        help="Print determinant and conditioning of the controlled site Jacobian.",
+    )
+    parser.add_argument(
+        "--debug-jacobian-interval",
+        type=int,
+        default=100,
+        help="Simulation steps between --debug-jacobian metric prints.",
+    )
+    parser.add_argument(
+        "--debug-compliance",
+        action="store_true",
+        help="Print suction-tool compliance joint displacement and velocity.",
+    )
+    parser.add_argument(
+        "--debug-compliance-interval",
+        type=int,
+        default=100,
+        help="Simulation steps between --debug-compliance metric prints.",
+    )
     return parser.parse_args()
 
 
 def reset_scene(model: mujoco.MjModel, data: mujoco.MjData, keyframe_name: str) -> None:
+    """Reset MuJoCo and then apply the user-tuned test_seal start pose."""
+
     if keyframe_name:
         key_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_KEY, keyframe_name)
         if key_id < 0:
@@ -112,6 +147,8 @@ def reset_scene(model: mujoco.MjModel, data: mujoco.MjData, keyframe_name: str) 
 
 
 def current_arm_qpos(model: mujoco.MjModel, data: mujoco.MjData) -> list[float]:
+    """Read the six arm joint positions in actuator order."""
+
     qpos: list[float] = []
     for joint_name in ARM_JOINT_NAMES:
         joint_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, joint_name)
@@ -127,6 +164,8 @@ def hold_initial_pose(
     hold_seconds: float,
     viewer: mujoco.viewer.Handle | None = None,
 ) -> None:
+    """Hold the initial pose so we can visually validate it before the controller starts."""
+
     if hold_seconds <= 0.0:
         return
 
@@ -138,6 +177,7 @@ def hold_initial_pose(
         if viewer is not None and not viewer.is_running():
             break
         frame_start = time.perf_counter()
+        # Keep actuator targets fixed at the current arm pose during the hold period.
         data.ctrl[: len(hold_qpos)] = hold_qpos
         mujoco.mj_step(model, data)
         if viewer is not None:
@@ -148,6 +188,8 @@ def hold_initial_pose(
 
 
 def maybe_set_camera(viewer: mujoco.viewer.Handle, model: mujoco.MjModel, camera_name: str | None) -> None:
+    """Switch the viewer to a named fixed camera when requested."""
+
     if camera_name is None:
         return
     camera_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_CAMERA, camera_name)
@@ -166,6 +208,13 @@ def draw_debug_waypoints(
     tcp_trace: list[np.ndarray],
     draw_axes: bool,
 ) -> None:
+    """Draw planned waypoints, active waypoint, TCP trace and optional axes.
+
+    Red spheres are planned Cartesian waypoints.  The yellow sphere is the
+    active waypoint.  Blue trace spheres show where the controlled site has
+    actually moved, which is useful for tracking-error debugging.
+    """
+
     if not hasattr(viewer, "user_scn"):
         return
     scene = viewer.user_scn
@@ -176,6 +225,7 @@ def draw_debug_waypoints(
     for waypoint in waypoints:
         if scene.ngeom >= scene.maxgeom:
             break
+        # User geoms are rebuilt every frame, so debug graphics never modify the MJCF.
         mujoco.mjv_initGeom(
             scene.geoms[scene.ngeom],
             mujoco.mjtGeom.mjGEOM_SPHERE,
@@ -213,6 +263,8 @@ def draw_debug_waypoints(
 
 
 def draw_debug_axes(scene: mujoco.MjvScene, model: mujoco.MjModel, data: mujoco.MjData) -> None:
+    """Draw RGB frames on robot links and key tool sites."""
+
     axis_colors = (
         np.array((1.0, 0.0, 0.0, 0.95), dtype=float),
         np.array((0.0, 0.9, 0.1, 0.95), dtype=float),
@@ -221,6 +273,7 @@ def draw_debug_axes(scene: mujoco.MjvScene, model: mujoco.MjModel, data: mujoco.
     if not _draw_seal_tip_axes(scene, model, data, axis_colors):
         return
 
+    # Bodies get larger axes than sites so link frames remain readable from a distance.
     body_axis_length = 0.11
     site_axis_length = 0.075
     axis_width = 0.006
@@ -250,6 +303,8 @@ def _draw_seal_tip_axes(
     data: mujoco.MjData,
     axis_colors: tuple[np.ndarray, np.ndarray, np.ndarray],
 ) -> bool:
+    """Draw the controlled/seal tip frame first and make it visually obvious."""
+
     site_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_SITE, SEAL_DEBUG_AXIS_SITE_NAME)
     if site_id < 0:
         return True
@@ -277,6 +332,8 @@ def _draw_frame_axes(
     axis_width: float,
     axis_colors: tuple[np.ndarray, np.ndarray, np.ndarray],
 ) -> bool:
+    """Append three arrow geoms for one coordinate frame."""
+
     for axis_index, rgba in enumerate(axis_colors):
         if scene.ngeom >= scene.maxgeom:
             return False
@@ -302,6 +359,8 @@ def _draw_frame_axes(
 
 
 def _format_seal_debug(controller: SuctionGraspController) -> str:
+    """Human-readable seal metrics for terminal debugging."""
+
     evaluation = controller.current_seal_evaluation()
     if evaluation is None:
         return "seal=none"
@@ -314,6 +373,27 @@ def _format_seal_debug(controller: SuctionGraspController) -> str:
     )
 
 
+def _format_jacobian_debug(controller: SuctionGraspController) -> str:
+    """Human-readable Jacobian conditioning metrics."""
+
+    diagnostics = controller.jacobian_diagnostics()
+    return (
+        f"jac_det={diagnostics.determinant:.6e} "
+        f"jac_cond={diagnostics.condition:.3e} "
+        f"jac_smin={diagnostics.min_singular_value:.6e} "
+        f"jac_smax={diagnostics.max_singular_value:.6e}"
+    )
+
+
+def _format_compliance_debug(controller: SuctionGraspController) -> str:
+    """Human-readable compliant joint displacement/velocity."""
+
+    return (
+        f"compliance_q={controller.compliance_displacement():.5f} "
+        f"compliance_v={controller.compliance_velocity():.5f}"
+    )
+
+
 def run_headless(
     model: mujoco.MjModel,
     data: mujoco.MjData,
@@ -321,20 +401,33 @@ def run_headless(
     initial_hold_seconds: float,
     debug_seal: bool,
     debug_seal_interval: int,
+    debug_jacobian: bool,
+    debug_jacobian_interval: int,
+    debug_compliance: bool,
+    debug_compliance_interval: int,
 ) -> None:
+    """Run the controller without graphics for repeatable test/debug output."""
+
     hold_initial_pose(model, data, initial_hold_seconds)
     controller = SuctionGraspController.from_test_seal_scene(model, data)
     previous_signature = None
     seal_interval = max(1, debug_seal_interval)
+    jacobian_interval = max(1, debug_jacobian_interval)
+    compliance_interval = max(1, debug_compliance_interval)
     for step in range(max_steps):
         status = controller.step()
         signature = (status.current_target, status.phase, status.attached_target)
         if signature != previous_signature:
+            # Print only phase/target transitions unless explicit debug streams are enabled.
             contact_text = "" if status.last_contact is None else f" contact={status.last_contact}"
             print(f"step={step} target={status.current_target} phase={status.phase} attached={status.attached_target} reason={status.last_seal_reason}{contact_text}")
             previous_signature = signature
         if debug_seal and status.phase == "descend" and step % seal_interval == 0:
             print(f"step={step} {_format_seal_debug(controller)}")
+        if debug_jacobian and step % jacobian_interval == 0:
+            print(f"step={step} {_format_jacobian_debug(controller)}")
+        if debug_compliance and step % compliance_interval == 0:
+            print(f"step={step} {_format_compliance_debug(controller)}")
         mujoco.mj_step(model, data)
         if status.phase in ("done", "collision"):
             break
@@ -361,12 +454,21 @@ def run_viewer(
     close_when_done: bool,
     debug_seal: bool,
     debug_seal_interval: int,
+    debug_jacobian: bool,
+    debug_jacobian_interval: int,
+    debug_compliance: bool,
+    debug_compliance_interval: int,
 ) -> None:
+    """Run the interactive viewer while stepping the same controller as headless mode."""
+
     previous_signature = None
     tcp_trace: list[np.ndarray] = []
     seal_interval = max(1, debug_seal_interval)
+    jacobian_interval = max(1, debug_jacobian_interval)
+    compliance_interval = max(1, debug_compliance_interval)
     with mujoco.viewer.launch_passive(model, data) as viewer:
         if show_collision_geoms:
+            # Show all geom groups so invisible collision proxies become visible after tinting.
             viewer.opt.geomgroup[:] = 1
         maybe_set_camera(viewer, model, camera_name)
         hold_initial_pose(model, data, initial_hold_seconds, viewer)
@@ -378,17 +480,23 @@ def run_viewer(
             status = controller.step()
             signature = (status.current_target, status.phase, status.attached_target)
             if signature != previous_signature:
+                # Transition logs include tracking error so jumps are easy to correlate with phases.
                 waypoint_error = controller.active_waypoint_error()
                 orientation_error = controller.active_waypoint_orientation_error()
                 waypoint_text = "" if waypoint_error is None else f" waypoint_error={waypoint_error:.4f}"
                 orientation_text = "" if orientation_error is None else f" orientation_error={orientation_error:.4f}"
                 contact_text = "" if status.last_contact is None else f" contact={status.last_contact}"
                 print(f"step={step} target={status.current_target} phase={status.phase} attached={status.attached_target} reason={status.last_seal_reason}{waypoint_text}{orientation_text}{contact_text}")
-                previous_signature = signature
+            previous_signature = signature
             if debug_seal and status.phase == "descend" and step % seal_interval == 0:
                 print(f"step={step} {_format_seal_debug(controller)}")
+            if debug_jacobian and step % jacobian_interval == 0:
+                print(f"step={step} {_format_jacobian_debug(controller)}")
+            if debug_compliance and step % compliance_interval == 0:
+                print(f"step={step} {_format_compliance_debug(controller)}")
             mujoco.mj_step(model, data)
             if debug_waypoints or debug_axes:
+                # Draw after stepping so the trace follows the live simulated pose.
                 tcp_trace.append(controller.trajectory_position())
                 draw_debug_waypoints(
                     viewer,
@@ -433,6 +541,8 @@ def run_viewer(
 
 
 def main() -> None:
+    """Load the scene, configure debug visualization, and choose viewer/headless mode."""
+
     args = parse_args()
     scene_path = args.scene.resolve()
     if not scene_path.exists():
@@ -457,6 +567,10 @@ def main() -> None:
             args.initial_hold_seconds,
             args.debug_seal,
             args.debug_seal_interval,
+            args.debug_jacobian,
+            args.debug_jacobian_interval,
+            args.debug_compliance,
+            args.debug_compliance_interval,
         )
     else:
         run_viewer(
@@ -471,6 +585,10 @@ def main() -> None:
             args.close_when_done,
             args.debug_seal,
             args.debug_seal_interval,
+            args.debug_jacobian,
+            args.debug_jacobian_interval,
+            args.debug_compliance,
+            args.debug_compliance_interval,
         )
 
 
